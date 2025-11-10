@@ -141,7 +141,7 @@ export async function GET(request: NextRequest) {
     
     // Sumar horas estimadas de tareas asignadas y completadas
     for (const task of monthTasks) {
-      const uid = task.assignee_id || task.assigneeId
+      const uid = task.assignee_id
       if (!uid) continue
       
       const estimateHours = Number(task.estimate_hours || 0)
