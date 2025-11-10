@@ -1,0 +1,372 @@
+import { getSheetsClient, getSpreadsheetId } from '../sheets/client'
+
+export interface SalaryRecord {
+  id: string
+  workspace_id: string
+  user_id: string
+  monthly_salary: number
+  effective_month: string // YYYY-MM
+  notes?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ClientBillingRecord {
+  id: string
+  workspace_id: string
+  project_id: string
+  monthly_amount: number
+  payment_day: number // 1-31
+  created_at: string
+  updated_at: string
+}
+
+export interface PaymentRecord {
+  id: string
+  workspace_id: string
+  project_id: string
+  billing_id: string // Reference to ClientBillingRecord
+  expected_amount: number
+  paid_amount: number
+  expected_date: string // YYYY-MM-DD (calculated from payment_day)
+  paid_date: string // YYYY-MM-DD (actual payment date)
+  is_on_time: boolean // Calculated: paid_date <= expected_date
+  days_delay?: number // Calculated: days late (if delayed)
+  notes?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ExpenseRecord {
+  id: string
+  workspace_id: string
+  description: string
+  amount: number
+  expense_type: 'fixed' | 'variable' // fixed = mensual, variable = una vez
+  date: string // YYYY-MM-DD (fecha de compra/inicio)
+  is_installment?: boolean // Si es a meses sin intereses
+  installment_months?: number // Cuántos meses dura la compra
+  monthly_payment?: number // Pago mensual calculado (amount / installment_months)
+  notes?: string
+  created_at: string
+  updated_at: string
+}
+
+export type WorklogType = 'video' | 'design' | 'photo' | 'other'
+
+export interface WorklogRecord {
+  id: string
+  workspace_id: string
+  user_id: string
+  project_id?: string
+  type: WorklogType
+  hours: number
+  date: string // YYYY-MM-DD
+  notes?: string
+  created_at: string
+  updated_at: string
+}
+
+export class FinanceService {
+  private static async getSheet() {
+    const sheets = await getSheetsClient()
+    const spreadsheetId = getSpreadsheetId()
+    return { sheets, spreadsheetId }
+  }
+
+  private static async ensureSheetExists(sheetName: string, headers: string[]) {
+    const { sheets, spreadsheetId } = await this.getSheet()
+    const metadata = await sheets.spreadsheets.get({ spreadsheetId })
+    const exists = metadata.data.sheets?.some(s => s.properties?.title === sheetName)
+    if (!exists) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          requests: [
+            { addSheet: { properties: { title: sheetName } } }
+          ]
+        }
+      })
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `${sheetName}!A1:${String.fromCharCode(64 + headers.length)}1`,
+        valueInputOption: 'RAW',
+        requestBody: { values: [headers] }
+      })
+    }
+  }
+
+  // SALARIES
+  static async listSalaries(workspaceId: string): Promise<SalaryRecord[]> {
+    await this.ensureSheetExists('salaries', ['id','workspace_id','user_id','monthly_salary','effective_month','notes','created_at','updated_at'])
+    const { sheets, spreadsheetId } = await this.getSheet()
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: 'salaries!A2:H10000'
+    })
+    const rows = res.data.values || []
+    return rows
+      .filter(r => r[1] === workspaceId)
+      .map(r => ({
+        id: r[0],
+        workspace_id: r[1],
+        user_id: r[2],
+        monthly_salary: parseFloat(r[3] || '0'),
+        effective_month: r[4],
+        notes: r[5],
+        created_at: r[6],
+        updated_at: r[7]
+      }))
+  }
+
+  static async createSalary(data: Omit<SalaryRecord, 'id' | 'created_at' | 'updated_at'>): Promise<SalaryRecord> {
+    await this.ensureSheetExists('salaries', ['id','workspace_id','user_id','monthly_salary','effective_month','notes','created_at','updated_at'])
+    const { sheets, spreadsheetId } = await this.getSheet()
+    const id = `sal-${Date.now()}`
+    const now = new Date().toISOString()
+    const row = [id, data.workspace_id, data.user_id, data.monthly_salary, data.effective_month, data.notes || '', now, now]
+    await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: 'salaries!A:H',
+      valueInputOption: 'RAW',
+      requestBody: { values: [row] }
+    })
+    return { id, ...data, created_at: now, updated_at: now }
+  }
+
+  // CLIENT BILLING
+  static async listClientBilling(workspaceId: string): Promise<ClientBillingRecord[]> {
+    await this.ensureSheetExists('client_billing', ['id','workspace_id','project_id','monthly_amount','payment_day','created_at','updated_at'])
+    const { sheets, spreadsheetId } = await this.getSheet()
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: 'client_billing!A2:H10000'
+    })
+    const rows = res.data.values || []
+    return rows
+      .filter(r => r[1] === workspaceId)
+      .map(r => ({
+        id: r[0],
+        workspace_id: r[1],
+        project_id: r[2],
+        monthly_amount: parseFloat(r[3] || '0'),
+        payment_day: parseInt(r[4] || '1'),
+        created_at: r[5],
+        updated_at: r[6]
+      }))
+  }
+
+  static async createClientBilling(data: Omit<ClientBillingRecord, 'id' | 'created_at' | 'updated_at'>): Promise<ClientBillingRecord> {
+    await this.ensureSheetExists('client_billing', ['id','workspace_id','project_id','monthly_amount','payment_day','created_at','updated_at'])
+    const { sheets, spreadsheetId } = await this.getSheet()
+    const id = `bill-${Date.now()}`
+    const now = new Date().toISOString()
+    const row = [id, data.workspace_id, data.project_id, data.monthly_amount, data.payment_day, now, now]
+    await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: 'client_billing!A:G',
+      valueInputOption: 'RAW',
+      requestBody: { values: [row] }
+    })
+    return { id, ...data, created_at: now, updated_at: now }
+  }
+
+  // PAYMENT RECORDS (actual payments received)
+  static async listPaymentRecords(workspaceId: string, month?: string): Promise<PaymentRecord[]> {
+    await this.ensureSheetExists('payment_records', ['id','workspace_id','project_id','billing_id','expected_amount','paid_amount','expected_date','paid_date','is_on_time','days_delay','notes','created_at','updated_at'])
+    const { sheets, spreadsheetId } = await this.getSheet()
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: 'payment_records!A2:M10000'
+    })
+    const rows = res.data.values || []
+    let records = rows
+      .filter(r => r[1] === workspaceId)
+      .map(r => {
+        const expectedDate = r[6] || ''
+        const paidDate = r[7] || ''
+        const isOnTime = r[8] === 'true' || r[8] === true
+        return {
+          id: r[0],
+          workspace_id: r[1],
+          project_id: r[2],
+          billing_id: r[3],
+          expected_amount: parseFloat(r[4] || '0'),
+          paid_amount: parseFloat(r[5] || '0'),
+          expected_date: expectedDate,
+          paid_date: paidDate,
+          is_on_time: isOnTime,
+          days_delay: r[9] ? parseInt(r[9]) : undefined,
+          notes: r[10],
+          created_at: r[11],
+          updated_at: r[12]
+        }
+      })
+    
+    // Filter by month if provided (YYYY-MM format)
+    if (month) {
+      records = records.filter(r => r.paid_date.startsWith(month))
+    }
+    
+    return records
+  }
+
+  static async createPaymentRecord(data: Omit<PaymentRecord, 'id' | 'created_at' | 'updated_at'>): Promise<PaymentRecord> {
+    await this.ensureSheetExists('payment_records', ['id','workspace_id','project_id','billing_id','expected_amount','paid_amount','expected_date','paid_date','is_on_time','days_delay','notes','created_at','updated_at'])
+    
+    // Calculate is_on_time and days_delay
+    const expectedDate = new Date(data.expected_date)
+    const paidDate = new Date(data.paid_date)
+    const isOnTime = paidDate <= expectedDate
+    const daysDelay = !isOnTime ? Math.ceil((paidDate.getTime() - expectedDate.getTime()) / (1000 * 60 * 60 * 24)) : undefined
+    
+    const { sheets, spreadsheetId } = await this.getSheet()
+    const id = `pr-${Date.now()}`
+    const now = new Date().toISOString()
+    const row = [
+      id,
+      data.workspace_id,
+      data.project_id,
+      data.billing_id,
+      data.expected_amount,
+      data.paid_amount,
+      data.expected_date,
+      data.paid_date,
+      isOnTime.toString(),
+      daysDelay?.toString() || '',
+      data.notes || '',
+      now,
+      now
+    ]
+    await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: 'payment_records!A:M',
+      valueInputOption: 'RAW',
+      requestBody: { values: [row] }
+    })
+    return {
+      id,
+      ...data,
+      is_on_time: isOnTime,
+      days_delay: daysDelay,
+      created_at: now,
+      updated_at: now
+    }
+  }
+
+  // WORKLOGS (time by type)
+  static async listWorklogs(workspaceId: string): Promise<WorklogRecord[]> {
+    await this.ensureSheetExists('worklogs', ['id','workspace_id','user_id','project_id','type','hours','date','notes','created_at','updated_at'])
+    const { sheets, spreadsheetId } = await this.getSheet()
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: 'worklogs!A2:J10000'
+    })
+    const rows = res.data.values || []
+    return rows
+      .filter(r => r[1] === workspaceId)
+      .map(r => ({
+        id: r[0],
+        workspace_id: r[1],
+        user_id: r[2],
+        project_id: r[3],
+        type: (r[4] || 'other') as WorklogType,
+        hours: parseFloat(r[5] || '0'),
+        date: r[6],
+        notes: r[7],
+        created_at: r[8],
+        updated_at: r[9]
+      }))
+  }
+
+  static async createWorklog(data: Omit<WorklogRecord, 'id' | 'created_at' | 'updated_at'>): Promise<WorklogRecord> {
+    await this.ensureSheetExists('worklogs', ['id','workspace_id','user_id','project_id','type','hours','date','notes','created_at','updated_at'])
+    const { sheets, spreadsheetId } = await this.getSheet()
+    const id = `wl-${Date.now()}`
+    const now = new Date().toISOString()
+    const row = [id, data.workspace_id, data.user_id, data.project_id || '', data.type, data.hours, data.date, data.notes || '', now, now]
+    await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: 'worklogs!A:J',
+      valueInputOption: 'RAW',
+      requestBody: { values: [row] }
+    })
+    return { id, ...data, created_at: now, updated_at: now }
+  }
+
+  // EXPENSES
+  static async listExpenses(workspaceId: string): Promise<ExpenseRecord[]> {
+    await this.ensureSheetExists('expenses', ['id','workspace_id','description','amount','expense_type','date','is_installment','installment_months','monthly_payment','notes','created_at','updated_at'])
+    const { sheets, spreadsheetId } = await this.getSheet()
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: 'expenses!A2:L10000'
+    })
+    const rows = res.data.values || []
+    return rows
+      .filter(r => r[1] === workspaceId)
+      .map(r => {
+        const isInstallment = r[6] === 'true' || r[6] === true
+        const installmentMonths = parseInt(r[7] || '0') || 0
+        const monthlyPayment = parseFloat(r[8] || '0') || (isInstallment && installmentMonths > 0 ? parseFloat(r[3] || '0') / installmentMonths : 0)
+        return {
+          id: r[0],
+          workspace_id: r[1],
+          description: r[2],
+          amount: parseFloat(r[3] || '0'),
+          expense_type: (r[4] || 'variable') as 'fixed' | 'variable',
+          date: r[5],
+          is_installment: isInstallment,
+          installment_months: installmentMonths,
+          monthly_payment: monthlyPayment,
+          notes: r[9],
+          created_at: r[10],
+          updated_at: r[11]
+        }
+      })
+  }
+
+  static async createExpense(data: Omit<ExpenseRecord, 'id' | 'created_at' | 'updated_at'>): Promise<ExpenseRecord> {
+    await this.ensureSheetExists('expenses', ['id','workspace_id','description','amount','expense_type','date','is_installment','installment_months','monthly_payment','notes','created_at','updated_at'])
+    const { sheets, spreadsheetId } = await this.getSheet()
+    const id = `exp-${Date.now()}`
+    const now = new Date().toISOString()
+    
+    // Calcular pago mensual si es a meses sin intereses
+    const isInstallment = data.is_installment || false
+    const installmentMonths = data.installment_months || 0
+    const monthlyPayment = isInstallment && installmentMonths > 0 
+      ? data.amount / installmentMonths 
+      : (data.monthly_payment || 0)
+    
+    const row = [
+      id, 
+      data.workspace_id, 
+      data.description, 
+      data.amount, 
+      data.expense_type, 
+      data.date,
+      isInstallment ? 'true' : 'false',
+      installmentMonths || '',
+      monthlyPayment || '',
+      data.notes || '', 
+      now, 
+      now
+    ]
+    await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: 'expenses!A:L',
+      valueInputOption: 'RAW',
+      requestBody: { values: [row] }
+    })
+    return { 
+      id, 
+      ...data, 
+      monthly_payment: monthlyPayment,
+      created_at: now, 
+      updated_at: now 
+    }
+  }
+}
+
+
