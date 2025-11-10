@@ -157,10 +157,10 @@ export default function ClickUpListView({ params }: { params: { id: string; proj
   const handleTaskStatusChange = async (taskId: string, newStatus: string) => {
     // UI optimista
     setUpdatingTask(prev => ({ ...prev, [taskId]: true }))
-    const previousStatus = tasks.find(t => t.id === taskId)?.status
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t))
+    const previousStatus = tasks.find(t => t.id === taskId)?.status as Task['status'] | undefined
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus as Task['status'] } : t))
     try {
-      await handleTaskUpdate(taskId, { status: newStatus })
+      await handleTaskUpdate(taskId, { status: newStatus as Task['status'] })
     } catch (e) {
       // rollback si falla
       setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: previousStatus } : t))
