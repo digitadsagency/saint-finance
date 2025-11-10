@@ -289,7 +289,7 @@ export default function ProjectListPage({
                           <span className={`ml-2 inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getPriorityColor(task.priority)}`}>
                             {task.priority === 'urgent' ? 'Urgente' :
                              task.priority === 'high' ? 'Alta' :
-                             task.priority === 'medium' ? 'Media' : 'Baja'}
+                              task.priority === 'med' ? 'Media' : 'Baja'}
                           </span>
                         </div>
                       </td>
