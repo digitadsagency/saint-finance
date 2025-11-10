@@ -104,7 +104,7 @@ export async function GET(request: NextRequest) {
 
     const groupedSal = new Map<string, any[]>()
     for (const s of salaries) {
-      const uid = s.user_id || s.employee_id || s.employeeId
+      const uid = s.user_id
       const arr = groupedSal.get(uid) || []
       arr.push(s)
       groupedSal.set(uid, arr)
