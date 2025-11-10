@@ -163,7 +163,9 @@ export default function ClickUpListView({ params }: { params: { id: string; proj
       await handleTaskUpdate(taskId, { status: newStatus as Task['status'] })
     } catch (e) {
       // rollback si falla
-      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: previousStatus } : t))
+      if (previousStatus) {
+        setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: previousStatus } : t))
+      }
     } finally {
       setUpdatingTask(prev => {
         const { [taskId]: _omit, ...rest } = prev
