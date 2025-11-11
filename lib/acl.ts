@@ -29,7 +29,7 @@ export const PERMISSIONS = {
 } as const;
 
 export const hasPermission = (userRole: Role, permission: keyof typeof PERMISSIONS): boolean => {
-  return PERMISSIONS[permission].includes(userRole);
+  return (PERMISSIONS[permission] as Role[]).includes(userRole);
 };
 
 export const canViewWorkspace = (role: Role): boolean => {
