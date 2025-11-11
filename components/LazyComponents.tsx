@@ -7,7 +7,7 @@ import { Loader2 } from 'lucide-react'
 export const LazyKanbanBoard = lazy(() => import('./KanbanBoard').then(module => ({ default: module.KanbanBoard })))
 export const LazyTaskDrawer = lazy(() => import('./TaskDrawer').then(module => ({ default: module.TaskDrawer })))
 export const LazyInteractiveModal = lazy(() => import('./InteractiveModal').then(module => ({ default: module.InteractiveModal })))
-export const LazyProjectCreationModal = lazy(() => import('./ProjectCreationModal').then(module => ({ default: module.ProjectCreationModal })))
+export const LazyProjectCreationModal = lazy(() => import('./ProjectCreationModal').then(module => ({ default: module.ClientCreationModal })))
 export const LazyTeamEfficiencyWidget = lazy(() => import('./TeamEfficiencyWidget').then(module => ({ default: module.TeamEfficiencyWidget })))
 
 // Loading component
