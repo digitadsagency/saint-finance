@@ -62,8 +62,8 @@ export async function getFinanceMetrics(month: string): Promise<FinanceMetrics> 
     prisma.client.findMany({ select: { id: true, name: true } }),
   ])
 
-  const clientById = new Map(clients.map(c => [c.id, c]))
-  const projectById = new Map(projects.map(p => [p.id, p]))
+  const clientById = new Map(clients.map((c: any) => [c.id, c]))
+  const projectById = new Map(projects.map((p: any) => [p.id, p]))
 
   // Salaries: effective <= month; choose latest by effectiveMonth then createdAt
   const salariesAll = await prisma.employeeSalary.findMany({
