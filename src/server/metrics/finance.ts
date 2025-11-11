@@ -187,7 +187,7 @@ export async function getFinanceMetrics(month: string): Promise<FinanceMetrics> 
   for (const [pid, rev] of Array.from(revenueProject.entries())) {
     const agg = projectAgg.get(pid) || { revenue: rev, horas: 0, costoLabor: 0 }
     if (!projectAgg.has(pid)) {
-      const p = projectById.get(pid)
+      const p = projectById.get(pid) as any
       if (!p) continue
       const arr = clientProjects.get(p.clientId) || []
       arr.push({ projectId: p.id, projectName: p.name, revenue: rev, horas: 0, costoLabor: 0 })
