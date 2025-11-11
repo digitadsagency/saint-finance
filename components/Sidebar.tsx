@@ -104,7 +104,7 @@ export function Sidebar({ workspaceId }: SidebarProps) {
     router.push('/sign-in')
   }
 
-  const isAdmin = (user?.name || user?.username || '').toLowerCase() === 'miguel' || (user?.name || user?.username || '').toLowerCase() === 'raul'
+  const isAdmin = (user?.name || '').toLowerCase() === 'miguel' || (user?.name || '').toLowerCase() === 'raul'
 
   return (
     <div className={cn(
