@@ -1,5 +1,6 @@
 import { getSheetsClient, getSpreadsheetId, getSheetName } from '../client';
-import { generateId, now } from '../../ids';
+import { generateId } from '../../ids';
+const now = () => Date.now();
 import { cache, getCacheKey } from '../../cache';
 
 export abstract class BaseDAO<T> {
