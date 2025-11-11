@@ -111,7 +111,7 @@ export function getLRUCache<T>(maxSize: number = 100, ttl: number = 30000): LRUC
       set: () => {},
       delete: () => {},
       clear: () => {},
-    } as LRUCache<T>
+    } as unknown as LRUCache<T>
   }
 
   if (!cacheInstance) {
