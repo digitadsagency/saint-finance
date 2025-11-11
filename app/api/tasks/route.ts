@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch with circuit breaker and retry
-    let tasks
+    let tasks: any[]
     if (isPerfHardening) {
       const breaker = getCircuitBreaker('/api/tasks')
       tasks = await breaker.execute(async () => {
