@@ -176,7 +176,7 @@ export async function getFinanceMetrics(month: string): Promise<FinanceMetrics> 
       arr.push({ projectId: null, projectName: 'Interno/No asignado', revenue: 0 + agg.revenue, horas: agg.horas, costoLabor: agg.costoLabor })
       continue
     }
-    const p = projectById.get(pid)
+    const p = projectById.get(pid) as any
     if (!p) continue
     const arr = clientProjects.get(p.clientId) || []
     arr.push({ projectId: p.id, projectName: p.name, revenue: agg.revenue, horas: agg.horas, costoLabor: agg.costoLabor })
@@ -199,7 +199,7 @@ export async function getFinanceMetrics(month: string): Promise<FinanceMetrics> 
   const clientsMetrics: FinanceMetrics['clients'] = []
   for (const [cid, projs] of Array.from(clientProjects.entries())) {
     if (!projs || projs.length === 0) continue
-    const clientName = cid ? (clientById.get(cid)?.name || 'Cliente') : 'No asignado'
+    const clientName = cid ? ((clientById.get(cid) as any)?.name || 'Cliente') : 'No asignado'
     const revenue = projs.reduce((s: number, p: any) => s + (p.revenue || 0), 0)
     const horas = projs.reduce((s: number, p: any) => s + (p.horas || 0), 0)
     const costoLabor = projs.reduce((s: number, p: any) => s + (p.costoLabor || 0), 0)
