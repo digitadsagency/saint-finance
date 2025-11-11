@@ -128,8 +128,8 @@ export async function getFinanceMetrics(month: string): Promise<FinanceMetrics> 
 
   // Revenue allocation to projects
   const revenueProject = new Map<string, number>()
-  for (const [pid, amount] of billingPerProject) revenueProject.set(pid, amount)
-  for (const [cid, amount] of billingPerClient) {
+  for (const [pid, amount] of Array.from(billingPerProject.entries())) revenueProject.set(pid, amount)
+  for (const [cid, amount] of Array.from(billingPerClient.entries())) {
     const projs = projects.filter(p => p.clientId === cid)
     if (projs.length === 0) {
       // keep at client level only; handled below
@@ -146,7 +146,7 @@ export async function getFinanceMetrics(month: string): Promise<FinanceMetrics> 
   const projectAgg = new Map<string, ProjectAgg>()
 
   // Hours and labor cost by project
-  for (const [key, horas] of horasByProjectEmployee.entries()) {
+  for (const [key, horas] of Array.from(horasByProjectEmployee.entries())) {
     const [pid, eid] = key.split('|')
     const costHour = employeeCostHour.get(eid) || 0
     const costoLabor = costHour * horas
@@ -156,7 +156,7 @@ export async function getFinanceMetrics(month: string): Promise<FinanceMetrics> 
     projectAgg.set(pid, agg)
   }
   // Add revenue to projectAgg
-  for (const [pid, rev] of revenueProject.entries()) {
+  for (const [pid, rev] of Array.from(revenueProject.entries())) {
     const agg = projectAgg.get(pid) || { revenue: 0, horas: 0, costoLabor: 0 }
     agg.revenue += rev
     projectAgg.set(pid, agg)
@@ -170,7 +170,7 @@ export async function getFinanceMetrics(month: string): Promise<FinanceMetrics> 
   }
   clientProjects.set(null, [])
 
-  for (const [pid, agg] of projectAgg.entries()) {
+  for (const [pid, agg] of Array.from(projectAgg.entries())) {
     if (pid === 'none') {
       const arr = clientProjects.get(null)!
       arr.push({ projectId: null, projectName: 'Interno/No asignado', revenue: 0 + agg.revenue, horas: agg.horas, costoLabor: agg.costoLabor })
@@ -184,7 +184,7 @@ export async function getFinanceMetrics(month: string): Promise<FinanceMetrics> 
   }
 
   // Also include projects with revenue but no hours
-  for (const [pid, rev] of revenueProject.entries()) {
+  for (const [pid, rev] of Array.from(revenueProject.entries())) {
     const agg = projectAgg.get(pid) || { revenue: rev, horas: 0, costoLabor: 0 }
     if (!projectAgg.has(pid)) {
       const p = projectById.get(pid)
@@ -197,7 +197,7 @@ export async function getFinanceMetrics(month: string): Promise<FinanceMetrics> 
 
   // Compose client metrics
   const clientsMetrics: FinanceMetrics['clients'] = []
-  for (const [cid, projs] of clientProjects.entries()) {
+  for (const [cid, projs] of Array.from(clientProjects.entries())) {
     if (!projs || projs.length === 0) continue
     const clientName = cid ? (clientById.get(cid)?.name || 'Cliente') : 'No asignado'
     const revenue = projs.reduce((s, p) => s + (p.revenue || 0), 0)
