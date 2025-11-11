@@ -70,20 +70,20 @@ export async function POST(request: NextRequest) {
     // 4) Worklogs por etapas y tipos
     const wl: Array<Parameters<typeof FinanceService.createWorklog>[0]> = [
       // Pablo audiovisual (Cliente X)
-      { workspace_id: workspaceId, user_id: 'user-1', project_id: projA.id, type: 'guion', hours: 3, date: ymd(month, 3), notes: '' },
-      { workspace_id: workspaceId, user_id: 'user-1', project_id: projA.id, type: 'sesion', hours: 4, date: ymd(month, 5), notes: '' },
-      { workspace_id: workspaceId, user_id: 'user-1', project_id: projA.id, type: 'edicion', hours: 6, date: ymd(month, 7), notes: '' },
-      { workspace_id: workspaceId, user_id: 'user-1', project_id: projA.id, type: 'color', hours: 2, date: ymd(month, 8), notes: '' },
-      { workspace_id: workspaceId, user_id: 'user-1', project_id: projA.id, type: 'upload', hours: 1, date: ymd(month, 9), notes: '' },
+      { workspace_id: workspaceId, user_id: 'user-1', project_id: projA.id, type: 'video', hours: 3, date: ymd(month, 3), notes: '' },
+      { workspace_id: workspaceId, user_id: 'user-1', project_id: projA.id, type: 'video', hours: 4, date: ymd(month, 5), notes: '' },
+      { workspace_id: workspaceId, user_id: 'user-1', project_id: projA.id, type: 'video', hours: 6, date: ymd(month, 7), notes: '' },
+      { workspace_id: workspaceId, user_id: 'user-1', project_id: projA.id, type: 'video', hours: 2, date: ymd(month, 8), notes: '' },
+      { workspace_id: workspaceId, user_id: 'user-1', project_id: projA.id, type: 'video', hours: 1, date: ymd(month, 9), notes: '' },
 
       // Sandra diseño (Cliente Y)
-      { workspace_id: workspaceId, user_id: 'user-3', project_id: projB.id, type: 'brief', hours: 2, date: ymd(month, 4), notes: '' },
-      { workspace_id: workspaceId, user_id: 'user-3', project_id: projB.id, type: 'diseño', hours: 8, date: ymd(month, 6), notes: '' },
-      { workspace_id: workspaceId, user_id: 'user-3', project_id: projB.id, type: 'revision', hours: 3, date: ymd(month, 10), notes: '' },
-      { workspace_id: workspaceId, user_id: 'user-3', project_id: projB.id, type: 'publish', hours: 1, date: ymd(month, 12), notes: '' },
+      { workspace_id: workspaceId, user_id: 'user-3', project_id: projB.id, type: 'design', hours: 2, date: ymd(month, 4), notes: '' },
+      { workspace_id: workspaceId, user_id: 'user-3', project_id: projB.id, type: 'design', hours: 8, date: ymd(month, 6), notes: '' },
+      { workspace_id: workspaceId, user_id: 'user-3', project_id: projB.id, type: 'design', hours: 3, date: ymd(month, 10), notes: '' },
+      { workspace_id: workspaceId, user_id: 'user-3', project_id: projB.id, type: 'design', hours: 1, date: ymd(month, 12), notes: '' },
 
       // Interno/No asignado
-      { workspace_id: workspaceId, user_id: 'user-1', project_id: undefined, type: 'reunion interna', hours: 2, date: ymd(month, 2), notes: '' },
+      { workspace_id: workspaceId, user_id: 'user-1', project_id: undefined, type: 'other', hours: 2, date: ymd(month, 2), notes: '' },
     ]
     for (const w of wl) { await FinanceService.createWorklog(w as any) }
 
