@@ -254,6 +254,130 @@ export class FinanceService {
     }
   }
 
+  static async updatePaymentRecord(id: string, data: Partial<Omit<PaymentRecord, 'id' | 'created_at' | 'workspace_id' | 'is_on_time' | 'days_delay'>>): Promise<PaymentRecord> {
+    await this.ensureSheetExists('payment_records', ['id','workspace_id','project_id','billing_id','expected_amount','paid_amount','expected_date','paid_date','is_on_time','days_delay','notes','created_at','updated_at'])
+    const { sheets, spreadsheetId } = await this.getSheet()
+    
+    // Get existing record
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: 'payment_records!A2:M10000'
+    })
+    const rows = res.data.values || []
+    const rowIndex = rows.findIndex(r => r[0] === id)
+    
+    if (rowIndex === -1) {
+      throw new Error('Payment record not found')
+    }
+    
+    const existingRow = rows[rowIndex]
+    const existingRecord: PaymentRecord = {
+      id: existingRow[0],
+      workspace_id: existingRow[1],
+      project_id: existingRow[2],
+      billing_id: existingRow[3],
+      expected_amount: parseFloat(existingRow[4] || '0'),
+      paid_amount: parseFloat(existingRow[5] || '0'),
+      expected_date: existingRow[6] || '',
+      paid_date: existingRow[7] || '',
+      is_on_time: existingRow[8] === 'true' || existingRow[8] === true,
+      days_delay: existingRow[9] ? parseInt(existingRow[9]) : undefined,
+      notes: existingRow[10] || '',
+      created_at: existingRow[11],
+      updated_at: existingRow[12]
+    }
+    
+    // Merge with new data
+    const updatedData = {
+      ...existingRecord,
+      ...data,
+      expected_date: data.expected_date || existingRecord.expected_date,
+      paid_date: data.paid_date || existingRecord.paid_date
+    }
+    
+    // Recalculate is_on_time and days_delay
+    const expectedDate = new Date(updatedData.expected_date)
+    const paidDate = new Date(updatedData.paid_date)
+    const isOnTime = paidDate <= expectedDate
+    const daysDelay = !isOnTime ? Math.ceil((paidDate.getTime() - expectedDate.getTime()) / (1000 * 60 * 60 * 24)) : undefined
+    
+    const now = new Date().toISOString()
+    const updatedRow = [
+      existingRecord.id,
+      existingRecord.workspace_id,
+      updatedData.project_id,
+      updatedData.billing_id,
+      updatedData.expected_amount,
+      updatedData.paid_amount,
+      updatedData.expected_date,
+      updatedData.paid_date,
+      isOnTime.toString(),
+      daysDelay?.toString() || '',
+      updatedData.notes || '',
+      existingRecord.created_at,
+      now
+    ]
+    
+    // Update the row (rowIndex + 2 because we start from row 2 in the sheet)
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `payment_records!A${rowIndex + 2}:M${rowIndex + 2}`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [updatedRow] }
+    })
+    
+    return {
+      ...updatedData,
+      is_on_time: isOnTime,
+      days_delay: daysDelay,
+      updated_at: now
+    }
+  }
+
+  static async deletePaymentRecord(id: string): Promise<void> {
+    await this.ensureSheetExists('payment_records', ['id','workspace_id','project_id','billing_id','expected_amount','paid_amount','expected_date','paid_date','is_on_time','days_delay','notes','created_at','updated_at'])
+    const { sheets, spreadsheetId } = await this.getSheet()
+    
+    // Get existing record to find row index
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: 'payment_records!A2:M10000'
+    })
+    const rows = res.data.values || []
+    const rowIndex = rows.findIndex(r => r[0] === id)
+    
+    if (rowIndex === -1) {
+      throw new Error('Payment record not found')
+    }
+    
+    // Delete the row (rowIndex + 2 because we start from row 2 in the sheet)
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [{
+          deleteDimension: {
+            range: {
+              sheetId: await this.getSheetId('payment_records'),
+              dimension: 'ROWS',
+              startIndex: rowIndex + 1, // +1 because sheets are 0-indexed but we start from row 2
+              endIndex: rowIndex + 2
+            }
+          }
+        }]
+      }
+    })
+  }
+
+  private static async getSheetId(sheetName: string): Promise<number> {
+    const { sheets, spreadsheetId } = await this.getSheet()
+    const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId })
+    const sheet = spreadsheet.data.sheets?.find(s => s.properties?.title === sheetName)
+    if (!sheet?.properties?.sheetId) {
+      throw new Error(`Sheet ${sheetName} not found`)
+    }
+    return sheet.properties.sheetId
+  }
+
   // WORKLOGS (time by type)
   static async listWorklogs(workspaceId: string): Promise<WorklogRecord[]> {
     await this.ensureSheetExists('worklogs', ['id','workspace_id','user_id','project_id','type','hours','date','notes','created_at','updated_at'])

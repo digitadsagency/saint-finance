@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/useAuth'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, DollarSign, Calendar as CalendarIcon, CheckCircle, AlertCircle, Plus } from 'lucide-react'
+import { ArrowLeft, DollarSign, Calendar as CalendarIcon, CheckCircle, AlertCircle, Plus, Edit, Trash2 } from 'lucide-react'
 import { PaymentRecordDialog } from '@/components/PaymentRecordDialog'
 import { toLocalYMD } from '@/lib/time'
 
@@ -25,6 +25,7 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
   const [showPaymentDialog, setShowPaymentDialog] = useState(false)
   const [selectedDayForPayment, setSelectedDayForPayment] = useState<string | null>(null)
   const [selectedBillingForPayment, setSelectedBillingForPayment] = useState<string | null>(null)
+  const [editingPayment, setEditingPayment] = useState<any | null>(null)
   const isAdmin = useMemo(() => {
     const name = (user?.name || '').toLowerCase()
     return name === 'miguel' || name === 'raul'
@@ -222,9 +223,10 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
 
   const handleSubmitPayment = async (data: any) => {
     const currentUserName = (user?.name || '').toLowerCase()
+    const isEditing = !!data.id
     
-    const res = await fetch('/api/finance/payments', {
-      method: 'POST',
+    const res = await fetch(isEditing ? '/api/finance/payments' : '/api/finance/payments', {
+      method: isEditing ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         current_user: currentUserName,
@@ -234,7 +236,11 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
     })
     if (res.ok) {
       const record = await res.json()
-      setPaymentRecords(prev => [...prev, record])
+      if (isEditing) {
+        setPaymentRecords(prev => prev.map(p => p.id === data.id ? record : p))
+      } else {
+        setPaymentRecords(prev => [...prev, record])
+      }
       // Reload data
       const monthStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}`
       const paymentsRes = await fetch(`/api/finance/payments?workspaceId=${params.id}&month=${monthStr}`)
@@ -242,10 +248,54 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
         const records = await paymentsRes.json()
         setPaymentRecords(Array.isArray(records) ? records : [])
       }
+      // Also reload all payments for stats
+      const allPaymentsRes = await fetch(`/api/finance/payments?workspaceId=${params.id}`)
+      if (allPaymentsRes.ok) {
+        const allData = await allPaymentsRes.json()
+        setAllPaymentRecords(Array.isArray(allData) ? allData : [])
+      }
     } else {
       const err = await res.json().catch(() => ({ error: 'Error desconocido' }))
-      alert(`Error al registrar pago: ${err.error || res.statusText}`)
+      alert(`Error al ${isEditing ? 'actualizar' : 'registrar'} pago: ${err.error || res.statusText}`)
       throw new Error(err.error || res.statusText)
+    }
+  }
+
+  const handleEditPayment = (payment: any) => {
+    setEditingPayment(payment)
+    setSelectedDayForPayment(payment.paid_date)
+    setSelectedBillingForPayment(payment.billing_id)
+    setShowPaymentDialog(true)
+  }
+
+  const handleDeletePayment = async (paymentId: string) => {
+    if (!confirm('¿Estás seguro de que quieres eliminar este pago?')) {
+      return
+    }
+    
+    const currentUserName = (user?.name || '').toLowerCase()
+    const res = await fetch(`/api/finance/payments?id=${paymentId}&current_user=${encodeURIComponent(currentUserName)}`, {
+      method: 'DELETE'
+    })
+    
+    if (res.ok) {
+      setPaymentRecords(prev => prev.filter(p => p.id !== paymentId))
+      setAllPaymentRecords(prev => prev.filter(p => p.id !== paymentId))
+      // Reload data
+      const monthStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}`
+      const paymentsRes = await fetch(`/api/finance/payments?workspaceId=${params.id}&month=${monthStr}`)
+      if (paymentsRes.ok) {
+        const records = await paymentsRes.json()
+        setPaymentRecords(Array.isArray(records) ? records : [])
+      }
+      const allPaymentsRes = await fetch(`/api/finance/payments?workspaceId=${params.id}`)
+      if (allPaymentsRes.ok) {
+        const allData = await allPaymentsRes.json()
+        setAllPaymentRecords(Array.isArray(allData) ? allData : [])
+      }
+    } else {
+      const err = await res.json().catch(() => ({ error: 'Error desconocido' }))
+      alert(`Error al eliminar pago: ${err.error || res.statusText}`)
     }
   }
 
@@ -450,21 +500,43 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
                         return (
                           <div
                             key={`paid-${paymentId}`}
-                            className={`p-1.5 rounded border text-xs ${
+                            className={`p-1.5 rounded border text-xs group ${
                               payment.isOnTime 
                                 ? 'bg-green-100 border-green-300' 
                                 : 'bg-red-100 border-red-300'
                             }`}
                           >
-                            <div className="flex items-center space-x-1 mb-1">
-                              {payment.isOnTime ? (
-                                <CheckCircle className="h-3 w-3 text-green-600" />
-                              ) : (
-                                <AlertCircle className="h-3 w-3 text-red-600" />
-                              )}
-                              <span className={`font-medium truncate ${payment.isOnTime ? 'text-green-800' : 'text-red-800'}`}>
-                                {payment.projectName} {payment.isOnTime ? '(A tiempo)' : `(${payment.daysDelay || 0} días tarde)`}
-                              </span>
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center space-x-1 flex-1">
+                                {payment.isOnTime ? (
+                                  <CheckCircle className="h-3 w-3 text-green-600" />
+                                ) : (
+                                  <AlertCircle className="h-3 w-3 text-red-600" />
+                                )}
+                                <span className={`font-medium truncate ${payment.isOnTime ? 'text-green-800' : 'text-red-800'}`}>
+                                  {payment.projectName} {payment.isOnTime ? '(A tiempo)' : `(${payment.daysDelay || 0} días tarde)`}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-4 w-4 p-0"
+                                  onClick={() => handleEditPayment(payment)}
+                                  title="Editar pago"
+                                >
+                                  <Edit className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-4 w-4 p-0 text-red-600 hover:text-red-700"
+                                  onClick={() => handleDeletePayment(paymentId)}
+                                  title="Eliminar pago"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
                             </div>
                             <div className={`font-semibold ${payment.isOnTime ? 'text-green-700' : 'text-red-700'}`}>
                               {formatMXN(payment.amount)}
@@ -592,12 +664,14 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
           setShowPaymentDialog(false)
           setSelectedDayForPayment(null)
           setSelectedBillingForPayment(null)
+          setEditingPayment(null)
         }}
         onSubmit={handleSubmitPayment}
         billings={billings}
         projects={projects}
         defaultDate={selectedDayForPayment || undefined}
         defaultBillingId={selectedBillingForPayment || undefined}
+        editingPayment={editingPayment}
       />
     </div>
   )

@@ -64,3 +64,64 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export async function PUT(request: NextRequest) {
+  try {
+    const body = await request.json()
+    if (!isAdminUser(body.current_user)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    if (!body.id) {
+      return NextResponse.json({ error: 'Payment record id is required' }, { status: 400 })
+    }
+
+    // Calculate expected_date from billing record's payment_day if billing_id is provided
+    let expectedDate = body.expected_date
+    if (body.billing_id) {
+      const billingRecords = await FinanceService.listClientBilling(body.workspace_id)
+      const billing = billingRecords.find(b => b.id === body.billing_id)
+      if (billing && body.paid_date) {
+        const paidDate = new Date(body.paid_date)
+        expectedDate = new Date(paidDate.getFullYear(), paidDate.getMonth(), billing.payment_day).toISOString().split('T')[0]
+      }
+    }
+
+    const updateData: any = {}
+    if (body.project_id) updateData.project_id = body.project_id
+    if (body.billing_id) updateData.billing_id = body.billing_id
+    if (body.expected_amount !== undefined) updateData.expected_amount = Number(body.expected_amount)
+    if (body.paid_amount !== undefined) updateData.paid_amount = Number(body.paid_amount)
+    if (expectedDate) updateData.expected_date = expectedDate
+    if (body.paid_date) updateData.paid_date = body.paid_date
+    if (body.notes !== undefined) updateData.notes = body.notes
+
+    const record = await FinanceService.updatePaymentRecord(body.id, updateData)
+    return NextResponse.json(record)
+  } catch (e) {
+    console.error('Error updating payment record:', e)
+    return NextResponse.json({ error: 'Failed to update payment record' }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get('id')
+    const currentUser = searchParams.get('current_user')
+
+    if (!id) {
+      return NextResponse.json({ error: 'Payment record id is required' }, { status: 400 })
+    }
+
+    if (!isAdminUser(currentUser)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    await FinanceService.deletePaymentRecord(id)
+    return NextResponse.json({ success: true })
+  } catch (e) {
+    console.error('Error deleting payment record:', e)
+    return NextResponse.json({ error: 'Failed to delete payment record' }, { status: 500 })
+  }
+}
+

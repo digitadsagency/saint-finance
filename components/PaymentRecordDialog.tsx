@@ -12,6 +12,7 @@ interface PaymentRecordDialogProps {
   open: boolean
   onClose: () => void
   onSubmit: (data: {
+    id?: string
     project_id: string
     billing_id: string
     expected_amount: number
@@ -23,6 +24,7 @@ interface PaymentRecordDialogProps {
   projects: any[]
   defaultDate?: string
   defaultBillingId?: string
+  editingPayment?: any // Payment record to edit
 }
 
 export function PaymentRecordDialog({
@@ -32,7 +34,8 @@ export function PaymentRecordDialog({
   billings,
   projects,
   defaultDate,
-  defaultBillingId
+  defaultBillingId,
+  editingPayment
 }: PaymentRecordDialogProps) {
   const [formData, setFormData] = useState({
     billing_id: '',
@@ -45,14 +48,25 @@ export function PaymentRecordDialog({
   // Actualizar el formulario cuando cambia defaultDate o defaultBillingId, o cuando se abre el diálogo
   useEffect(() => {
     if (open) {
-      setFormData({
-        billing_id: defaultBillingId || '',
-        paid_amount: '',
-        paid_date: defaultDate || new Date().toISOString().split('T')[0],
-        notes: ''
-      })
+      if (editingPayment) {
+        // Modo edición: cargar datos del pago existente
+        setFormData({
+          billing_id: editingPayment.billing_id || '',
+          paid_amount: editingPayment.paid_amount?.toString() || '',
+          paid_date: editingPayment.paid_date || new Date().toISOString().split('T')[0],
+          notes: editingPayment.notes || ''
+        })
+      } else {
+        // Modo creación: usar valores por defecto
+        setFormData({
+          billing_id: defaultBillingId || '',
+          paid_amount: '',
+          paid_date: defaultDate || new Date().toISOString().split('T')[0],
+          notes: ''
+        })
+      }
     }
-  }, [open, defaultDate, defaultBillingId])
+  }, [open, defaultDate, defaultBillingId, editingPayment])
 
   const selectedBilling = billings.find(b => b.id === formData.billing_id)
   const selectedProject = projects.find(p => p.id === selectedBilling?.project_id)
@@ -64,6 +78,7 @@ export function PaymentRecordDialog({
     setSubmitting(true)
     try {
       await onSubmit({
+        id: editingPayment?.id,
         project_id: selectedBilling.project_id,
         billing_id: formData.billing_id,
         expected_amount: selectedBilling.monthly_amount,
@@ -89,9 +104,9 @@ export function PaymentRecordDialog({
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Registrar Pago Recibido</DialogTitle>
+          <DialogTitle>{editingPayment ? 'Editar Pago Recibido' : 'Registrar Pago Recibido'}</DialogTitle>
           <DialogDescription>
-            Registra un pago recibido de un cliente
+            {editingPayment ? 'Edita los datos del pago recibido' : 'Registra un pago recibido de un cliente'}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -168,7 +183,7 @@ export function PaymentRecordDialog({
               Cancelar
             </Button>
             <Button type="submit" disabled={submitting || !formData.billing_id || !formData.paid_amount}>
-              {submitting ? 'Registrando...' : 'Registrar Pago'}
+              {submitting ? (editingPayment ? 'Guardando...' : 'Registrando...') : (editingPayment ? 'Guardar Cambios' : 'Registrar Pago')}
             </Button>
           </div>
         </form>

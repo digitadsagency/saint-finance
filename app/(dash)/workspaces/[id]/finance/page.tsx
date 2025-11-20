@@ -158,7 +158,12 @@ export default function FinancePage({ params }: { params: { id: string } }) {
     })
     if (res.ok) {
       const rec = await res.json()
-      setExpenses(prev => [rec, ...prev])
+      // Recargar todos los gastos para asegurar que se muestren correctamente
+      const expRes = await fetch(`/api/finance/expenses?workspaceId=${params.id}`)
+      if (expRes.ok) {
+        const expensesData = await expRes.json()
+        setExpenses(Array.isArray(expensesData) ? expensesData : [])
+      }
       setExpenseForm({ description: '', amount: '', expense_type: 'fixed', date: '', is_installment: false, installment_months: '', notes: '' })
     } else {
       const err = await res.json().catch(()=>({ error: 'Error desconocido' }))
