@@ -23,15 +23,15 @@ export async function GET(request: NextRequest) {
     const { TasksService } = await import('@/lib/services/tasks')
 
     const [salaries, worklogs, billings, projects, users, tasks, expenses, incomes, payments] = await Promise.all([
-      FinanceService.listSalaries(workspaceId),
-      FinanceService.listWorklogs(workspaceId),
-      FinanceService.listClientBilling(workspaceId),
-      ProjectsService.getAllProjects(workspaceId),
-      UsersService.getAllUsers().catch(() => []),
-      TasksService.getAllTasks(workspaceId).catch(() => []),
-      FinanceService.listExpenses(workspaceId).catch(() => []),
-      FinanceService.listIncomes(workspaceId).catch(() => []),
-      FinanceService.listPaymentRecords(workspaceId, m).catch(() => [])
+      FinanceService.listSalaries(workspaceId).catch((err) => { console.error('[Metrics] Error loading salaries:', err); return [] }),
+      FinanceService.listWorklogs(workspaceId).catch((err) => { console.error('[Metrics] Error loading worklogs:', err); return [] }),
+      FinanceService.listClientBilling(workspaceId).catch((err) => { console.error('[Metrics] Error loading billings:', err); return [] }),
+      ProjectsService.getAllProjects(workspaceId).catch((err) => { console.error('[Metrics] Error loading projects:', err); return [] }),
+      UsersService.getAllUsers().catch((err) => { console.error('[Metrics] Error loading users:', err); return [] }),
+      TasksService.getAllTasks(workspaceId).catch((err) => { console.error('[Metrics] Error loading tasks:', err); return [] }),
+      FinanceService.listExpenses(workspaceId).catch((err) => { console.error('[Metrics] Error loading expenses:', err); return [] }),
+      FinanceService.listIncomes(workspaceId).catch((err) => { console.error('[Metrics] Error loading incomes:', err); return [] }),
+      FinanceService.listPaymentRecords(workspaceId, m).catch((err) => { console.error('[Metrics] Error loading payments:', err); return [] })
     ])
     
     // Debug: Log data counts
