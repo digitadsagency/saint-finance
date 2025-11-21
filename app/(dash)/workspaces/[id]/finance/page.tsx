@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useAuth } from '@/lib/useAuth'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -56,6 +56,95 @@ export default function FinancePage({ params }: { params: { id: string } }) {
   const [editingSalary, setEditingSalary] = useState<any | null>(null)
   const [editingExpense, setEditingExpense] = useState<any | null>(null)
   const [editingIncome, setEditingIncome] = useState<any | null>(null)
+
+  // Calculate financial summary
+  const financialSummary = useMemo(() => {
+    const now = new Date()
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`
+    const monthPrefix = currentMonth + '-'
+    
+    // Validar que los arrays existan
+    const safeBillings = Array.isArray(billings) ? billings : []
+    const safeIncomes = Array.isArray(incomes) ? incomes : []
+    const safeExpenses = Array.isArray(expenses) ? expenses : []
+    const safeSalaries = Array.isArray(salaries) ? salaries : []
+    
+    // Ingresos esperados (facturación mensual)
+    const ingresosEsperados = safeBillings.reduce((sum: number, b: any) => sum + (Number(b.monthly_amount) || 0), 0)
+    
+    // Ingresos reales (pagos recibidos en el mes)
+    const ingresosReales = safeBillings.reduce((sum: number, b: any) => {
+      return sum + (Number(b.monthly_amount) || 0)
+    }, 0)
+    
+    // Ingresos variables del mes
+    const ingresosVariables = safeIncomes
+      .filter((inc: any) => inc && (inc.date || '').startsWith(monthPrefix))
+      .reduce((sum: number, inc: any) => sum + (Number(inc.amount) || 0), 0)
+    
+    // Ingresos totales
+    const ingresosTotales = ingresosReales + ingresosVariables
+    
+    // Gastos del mes
+    const gastosFijos = safeExpenses
+      .filter((e: any) => e && e.expense_type === 'fixed' && !e.is_installment && (e.date || '').startsWith(monthPrefix))
+      .reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0)
+    
+    const gastosVariables = safeExpenses
+      .filter((e: any) => e && e.expense_type === 'variable' && !e.is_installment && (e.date || '').startsWith(monthPrefix))
+      .reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0)
+    
+    // Gastos MSI del mes
+    const gastosMSI = safeExpenses
+      .filter((e: any) => {
+        if (!e || !e.is_installment || !e.date) return false
+        try {
+          const expenseDate = new Date(e.date)
+          if (isNaN(expenseDate.getTime())) return false
+          const expenseYear = expenseDate.getFullYear()
+          const expenseMonth = expenseDate.getMonth()
+          const [year, month] = currentMonth.split('-').map(Number)
+          
+          for (let i = 0; i < (e.installment_months || 0); i++) {
+            const paymentMonth = new Date(expenseYear, expenseMonth + i, 1)
+            if (paymentMonth.getFullYear() === year && paymentMonth.getMonth() + 1 === month) {
+              return true
+            }
+          }
+        } catch (err) {
+          return false
+        }
+        return false
+      })
+      .reduce((sum: number, e: any) => sum + (Number(e.monthly_payment) || 0), 0)
+    
+    const totalGastos = gastosFijos + gastosVariables + gastosMSI
+    
+    // Costo de nómina
+    const costoNomina = safeSalaries.reduce((sum: number, s: any) => sum + (Number(s.monthly_salary) || 0), 0)
+    
+    // Costo total
+    const costoTotal = costoNomina + totalGastos
+    
+    // Utilidad
+    const utilidad = ingresosTotales - costoTotal
+    const utilidadPct = ingresosTotales > 0 ? (utilidad / ingresosTotales * 100) : 0
+    
+    return {
+      ingresosEsperados,
+      ingresosReales,
+      ingresosVariables,
+      ingresosTotales,
+      gastosFijos,
+      gastosVariables,
+      gastosMSI,
+      totalGastos,
+      costoNomina,
+      costoTotal,
+      utilidad,
+      utilidadPct
+    }
+  }, [billings, incomes, expenses, salaries])
 
   // Load data
   useEffect(() => {
@@ -904,110 +993,45 @@ export default function FinancePage({ params }: { params: { id: string } }) {
         {/* Financial Summary / Utilidad */}
         <section className="bg-white rounded-lg shadow-sm border p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Resumen Financiero del Mes</h2>
-          {(() => {
-            const now = new Date()
-            const currentMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`
-            const monthPrefix = currentMonth + '-'
-            
-            // Ingresos esperados (facturación mensual)
-            const ingresosEsperados = billings.reduce((sum: number, b: any) => sum + (Number(b.monthly_amount) || 0), 0)
-            
-            // Ingresos reales (pagos recibidos en el mes)
-            const ingresosReales = billings.reduce((sum: number, b: any) => {
-              // Aquí deberías tener los pagos reales, por ahora usamos esperados
-              return sum + (Number(b.monthly_amount) || 0)
-            }, 0)
-            
-            // Ingresos variables del mes
-            const ingresosVariables = incomes
-              .filter((inc: any) => (inc.date || '').startsWith(monthPrefix))
-              .reduce((sum: number, inc: any) => sum + (Number(inc.amount) || 0), 0)
-            
-            // Ingresos totales
-            const ingresosTotales = ingresosReales + ingresosVariables
-            
-            // Gastos del mes
-            const gastosFijos = expenses
-              .filter((e: any) => e.expense_type === 'fixed' && !e.is_installment && (e.date || '').startsWith(monthPrefix))
-              .reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0)
-            
-            const gastosVariables = expenses
-              .filter((e: any) => e.expense_type === 'variable' && !e.is_installment && (e.date || '').startsWith(monthPrefix))
-              .reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0)
-            
-            // Gastos MSI del mes
-            const gastosMSI = expenses
-              .filter((e: any) => {
-                if (!e.is_installment || !e.date) return false
-                const expenseDate = new Date(e.date)
-                const expenseYear = expenseDate.getFullYear()
-                const expenseMonth = expenseDate.getMonth()
-                const [year, month] = currentMonth.split('-').map(Number)
-                
-                for (let i = 0; i < (e.installment_months || 0); i++) {
-                  const paymentMonth = new Date(expenseYear, expenseMonth + i, 1)
-                  if (paymentMonth.getFullYear() === year && paymentMonth.getMonth() + 1 === month) {
-                    return true
-                  }
-                }
-                return false
-              })
-              .reduce((sum: number, e: any) => sum + (Number(e.monthly_payment) || 0), 0)
-            
-            const totalGastos = gastosFijos + gastosVariables + gastosMSI
-            
-            // Costo de nómina
-            const costoNomina = salaries.reduce((sum: number, s: any) => sum + (Number(s.monthly_salary) || 0), 0)
-            
-            // Costo total
-            const costoTotal = costoNomina + totalGastos
-            
-            // Utilidad
-            const utilidad = ingresosTotales - costoTotal
-            const utilidadPct = ingresosTotales > 0 ? (utilidad / ingresosTotales * 100) : 0
-            
-            return (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="p-4 rounded-lg border-2 border-blue-200 bg-blue-50">
-                    <div className="text-sm text-gray-600 mb-1">Ingresos Esperados</div>
-                    <div className="text-2xl font-bold text-blue-700">
-                      {ingresosEsperados.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
-                    </div>
-                  </div>
-                  <div className="p-4 rounded-lg border-2 border-green-200 bg-green-50">
-                    <div className="text-sm text-gray-600 mb-1">Ingresos Totales</div>
-                    <div className="text-2xl font-bold text-green-700">
-                      {ingresosTotales.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      Recibidos: {ingresosReales.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })} + 
-                      Variables: {ingresosVariables.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
-                    </div>
-                  </div>
-                  <div className="p-4 rounded-lg border-2 border-red-200 bg-red-50">
-                    <div className="text-sm text-gray-600 mb-1">Costos Totales</div>
-                    <div className="text-2xl font-bold text-red-700">
-                      {costoTotal.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      Nómina: {costoNomina.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })} + 
-                      Gastos: {totalGastos.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
-                    </div>
-                  </div>
-                  <div className={`p-4 rounded-lg border-2 ${utilidad >= 0 ? 'border-green-300 bg-green-100' : 'border-red-300 bg-red-100'}`}>
-                    <div className="text-sm text-gray-600 mb-1">Utilidad del Mes</div>
-                    <div className={`text-2xl font-bold ${utilidad >= 0 ? 'text-green-800' : 'text-red-800'}`}>
-                      {utilidad.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
-                    </div>
-                    <div className="text-xs text-gray-600 mt-1">
-                      {utilidadPct.toFixed(1)}% de utilidad
-                    </div>
-                  </div>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="p-4 rounded-lg border-2 border-blue-200 bg-blue-50">
+                <div className="text-sm text-gray-600 mb-1">Ingresos Esperados</div>
+                <div className="text-2xl font-bold text-blue-700">
+                  {financialSummary.ingresosEsperados.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
                 </div>
               </div>
-            )
-          })()}
+              <div className="p-4 rounded-lg border-2 border-green-200 bg-green-50">
+                <div className="text-sm text-gray-600 mb-1">Ingresos Totales</div>
+                <div className="text-2xl font-bold text-green-700">
+                  {financialSummary.ingresosTotales.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  Recibidos: {financialSummary.ingresosReales.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })} + 
+                  Variables: {financialSummary.ingresosVariables.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+                </div>
+              </div>
+              <div className="p-4 rounded-lg border-2 border-red-200 bg-red-50">
+                <div className="text-sm text-gray-600 mb-1">Costos Totales</div>
+                <div className="text-2xl font-bold text-red-700">
+                  {financialSummary.costoTotal.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  Nómina: {financialSummary.costoNomina.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })} + 
+                  Gastos: {financialSummary.totalGastos.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+                </div>
+              </div>
+              <div className={`p-4 rounded-lg border-2 ${financialSummary.utilidad >= 0 ? 'border-green-300 bg-green-100' : 'border-red-300 bg-red-100'}`}>
+                <div className="text-sm text-gray-600 mb-1">Utilidad del Mes</div>
+                <div className={`text-2xl font-bold ${financialSummary.utilidad >= 0 ? 'text-green-800' : 'text-red-800'}`}>
+                  {financialSummary.utilidad.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+                </div>
+                <div className="text-xs text-gray-600 mt-1">
+                  {financialSummary.utilidadPct.toFixed(1)}% de utilidad
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
       </main>
     </div>
