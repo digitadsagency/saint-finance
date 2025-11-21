@@ -38,13 +38,19 @@ export default function FinanceMetricsPage({ params }: { params: { id: string } 
     setLoadingMetrics(true)
     try {
       const res = await fetch(`/api/metrics?month=${m}&workspaceId=${params.id}`, { cache: 'no-store' })
-      if (!res.ok) throw new Error('Error al cargar métricas')
+      if (!res.ok) {
+        const errorText = await res.text()
+        console.error('Error response:', errorText)
+        throw new Error(`Error al cargar métricas: ${res.status} ${res.statusText}`)
+      }
       const data = await res.json()
+      console.log('Metrics data received:', data)
+      console.log('Totals:', data.totals)
       setMetrics(data)
     } catch (e) {
-      console.error(e)
+      console.error('Error fetching metrics:', e)
       setMetrics(null)
-      alert('No se pudieron cargar las métricas')
+      alert(`No se pudieron cargar las métricas: ${e instanceof Error ? e.message : 'Error desconocido'}`)
     } finally {
       setLoadingMetrics(false)
     }

@@ -31,6 +31,10 @@ export async function GET(request: NextRequest) {
       FinanceService.listIncomes(workspaceId).catch(() => []),
       FinanceService.listPaymentRecords(workspaceId, m).catch(() => [])
     ])
+    
+    // Debug: Log data counts
+    console.log(`[Metrics] Month: ${m}, Workspace: ${workspaceId}`)
+    console.log(`[Metrics] Data counts: salaries=${salaries?.length || 0}, billings=${billings?.length || 0}, projects=${projects?.length || 0}, expenses=${expenses?.length || 0}, incomes=${incomes?.length || 0}, payments=${payments?.length || 0}`)
 
     // Mapear nombres de empleados
     const userNameById = new Map<string, string>()
@@ -448,13 +452,21 @@ export async function GET(request: NextRequest) {
 
     // Calcular ingresos esperados (de facturación mensual de clientes)
     // Los ingresos esperados vienen de la facturación mensual (billings)
-    const ingresosEsperados = (billings || []).reduce((sum: number, b: any) => sum + (Number(b.monthly_amount) || 0), 0)
+    const ingresosEsperados = (billings || []).reduce((sum: number, b: any) => {
+      const amount = Number(b.monthly_amount) || 0
+      return sum + amount
+    }, 0)
     
     // También sumar los ingresos esperados de los clientes calculados (revenue)
-    const ingresosEsperadosClientes = clients.reduce((s: number, c: any) => s + (Number(c.revenue) || 0), 0)
+    const ingresosEsperadosClientes = clients.reduce((s: number, c: any) => {
+      const revenue = Number(c.revenue) || 0
+      return s + revenue
+    }, 0)
     
     // Usar el mayor entre billings y revenue de clientes
     const ingresosEsperadosTotal = Math.max(ingresosEsperados, ingresosEsperadosClientes)
+    
+    console.log(`[Metrics] Ingresos esperados: billings=${ingresosEsperados}, clients=${ingresosEsperadosClientes}, total=${ingresosEsperadosTotal}`)
     
     // Calcular ingresos reales (pagos recibidos en el mes)
     const ingresosReales = (payments || []).reduce((sum: number, p: any) => sum + (Number(p.paid_amount) || 0), 0)
@@ -504,7 +516,10 @@ export async function GET(request: NextRequest) {
     const totalGastos = gastosFijos + gastosVariables + gastosMSIMesActual
     
     // Costo de nómina (sueldos mensuales)
-    const costoNomina = (salaries || []).reduce((sum: number, s: any) => sum + (Number(s.monthly_salary) || 0), 0)
+    const costoNomina = (salaries || []).reduce((sum: number, s: any) => {
+      const salary = Number(s.monthly_salary) || 0
+      return sum + salary
+    }, 0)
     
     // Costo laboral (horas trabajadas)
     const costoLabor = clients.reduce((s,c)=> s+(c.costoLabor||0),0)
