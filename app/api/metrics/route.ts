@@ -454,19 +454,26 @@ export async function GET(request: NextRequest) {
     // Los ingresos esperados vienen de la facturación mensual (billings)
     const ingresosEsperados = (billings || []).reduce((sum: number, b: any) => {
       const amount = Number(b.monthly_amount) || 0
+      if (amount > 0) {
+        console.log(`[Metrics] Billing found: project_id=${b.project_id}, monthly_amount=${amount}`)
+      }
       return sum + amount
     }, 0)
     
     // También sumar los ingresos esperados de los clientes calculados (revenue)
     const ingresosEsperadosClientes = clients.reduce((s: number, c: any) => {
       const revenue = Number(c.revenue) || 0
+      if (revenue > 0) {
+        console.log(`[Metrics] Client revenue found: clientId=${c.clientId}, revenue=${revenue}`)
+      }
       return s + revenue
     }, 0)
     
-    // Usar el mayor entre billings y revenue de clientes
-    const ingresosEsperadosTotal = Math.max(ingresosEsperados, ingresosEsperadosClientes)
+    // Usar el mayor entre billings y revenue de clientes, pero si ambos son 0, usar billings directamente
+    const ingresosEsperadosTotal = ingresosEsperados > 0 ? ingresosEsperados : Math.max(ingresosEsperados, ingresosEsperadosClientes)
     
     console.log(`[Metrics] Ingresos esperados: billings=${ingresosEsperados}, clients=${ingresosEsperadosClientes}, total=${ingresosEsperadosTotal}`)
+    console.log(`[Metrics] Billings array length: ${(billings || []).length}, Clients array length: ${clients.length}`)
     
     // Calcular ingresos reales (pagos recibidos en el mes)
     const ingresosReales = (payments || []).reduce((sum: number, p: any) => sum + (Number(p.paid_amount) || 0), 0)
