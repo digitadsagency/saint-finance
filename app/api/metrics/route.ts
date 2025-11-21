@@ -832,30 +832,35 @@ export async function GET(request: NextRequest) {
       }))
     }
 
+    const totals = { 
+      ingresos, 
+      ingresosEsperados: ingresosEsperadosTotal,
+      ingresosReales,
+      ingresosVariables,
+      costoLabor, 
+      costoNomina,
+      totalGastos,
+      gastosFijos,
+      gastosVariables,
+      gastosMSI: gastosMSIMesActual,
+      costoTotal,
+      utilidad,
+      utilidadPct,
+      margenAbs, 
+      margenPct, 
+      utilizacionPromedioEquipo 
+    }
+    
+    console.log(`[Metrics] Final totals:`, JSON.stringify(totals, null, 2))
+    console.log(`[Metrics] Summary: ingresosEsperados=${ingresosEsperadosTotal}, costoNomina=${costoNomina}, gastosFijos=${gastosFijos}, totalGastos=${totalGastos}`)
+    
     const metrics = { 
       month: m, 
       employees, 
       clients: clientsWithObjectives, 
       types, 
       stagesByEmployee, 
-      totals: { 
-        ingresos, 
-        ingresosEsperados: ingresosEsperadosTotal,
-        ingresosReales,
-        ingresosVariables,
-        costoLabor, 
-        costoNomina,
-        totalGastos,
-        gastosFijos,
-        gastosVariables,
-        gastosMSI: gastosMSIMesActual,
-        costoTotal,
-        utilidad,
-        utilidadPct,
-        margenAbs, 
-        margenPct, 
-        utilizacionPromedioEquipo 
-      },
+      totals,
       capacityAnalysis
     }
     const res = NextResponse.json(metrics)

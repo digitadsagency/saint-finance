@@ -48,6 +48,20 @@ export default function FinanceMetricsPage({ params }: { params: { id: string } 
       const data = await res.json()
       console.log('Metrics data received:', data)
       console.log('Totals:', data.totals)
+      console.log('Totals breakdown:', {
+        ingresos: data.totals?.ingresos,
+        ingresosEsperados: data.totals?.ingresosEsperados,
+        ingresosReales: data.totals?.ingresosReales,
+        ingresosVariables: data.totals?.ingresosVariables,
+        costoNomina: data.totals?.costoNomina,
+        totalGastos: data.totals?.totalGastos,
+        gastosFijos: data.totals?.gastosFijos,
+        costoLabor: data.totals?.costoLabor,
+        costoTotal: data.totals?.costoTotal,
+        utilidad: data.totals?.utilidad
+      })
+      console.log('Employees count:', data.employees?.length)
+      console.log('Clients count:', data.clients?.length)
       setMetrics(data)
     } catch (e) {
       console.error('Error fetching metrics:', e)
