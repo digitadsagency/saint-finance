@@ -491,8 +491,9 @@ export class FinanceService {
     ]
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: 'expenses!A:L',
+      range: 'expenses!A2:L2',
       valueInputOption: 'RAW',
+      insertDataOption: 'INSERT_ROWS',
       requestBody: { values: [row] }
     })
     return { 

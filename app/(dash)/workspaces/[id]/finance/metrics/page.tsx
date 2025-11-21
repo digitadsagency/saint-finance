@@ -91,20 +91,89 @@ export default function FinanceMetricsPage({ params }: { params: { id: string } 
         <section className="bg-white rounded-lg shadow-sm border p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Resumen del Mes</h2>
           {metrics?.totals ? (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="p-4 rounded-lg border-2 border-blue-200 bg-blue-50">
-                <div className="text-sm text-gray-600 mb-1">Ingresos Totales</div>
-                <div className="text-2xl font-bold text-blue-700">{formatMXN(metrics.totals.ingresos)}</div>
+            <div className="space-y-6">
+              {/* Ingresos */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="p-4 rounded-lg border-2 border-blue-200 bg-blue-50">
+                  <div className="text-sm text-gray-600 mb-1">Ingresos Esperados</div>
+                  <div className="text-2xl font-bold text-blue-700">{formatMXN(metrics.totals.ingresosEsperados || 0)}</div>
+                  <div className="text-xs text-gray-500 mt-1">Facturación mensual</div>
+                </div>
+                <div className="p-4 rounded-lg border-2 border-green-200 bg-green-50">
+                  <div className="text-sm text-gray-600 mb-1">Pagos Recibidos</div>
+                  <div className="text-2xl font-bold text-green-700">{formatMXN(metrics.totals.ingresosReales || 0)}</div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    {metrics.totals.ingresosEsperados > 0 
+                      ? `${((metrics.totals.ingresosReales || 0) / metrics.totals.ingresosEsperados * 100).toFixed(1)}%` 
+                      : '0%'} recibido
+                  </div>
+                </div>
+                <div className="p-4 rounded-lg border-2 border-purple-200 bg-purple-50">
+                  <div className="text-sm text-gray-600 mb-1">Ingresos Variables</div>
+                  <div className="text-2xl font-bold text-purple-700">{formatMXN(metrics.totals.ingresosVariables || 0)}</div>
+                  <div className="text-xs text-gray-500 mt-1">Sesiones únicas, etc.</div>
+                </div>
+                <div className="p-4 rounded-lg border-2 border-indigo-200 bg-indigo-50">
+                  <div className="text-sm text-gray-600 mb-1">Ingresos Totales</div>
+                  <div className="text-2xl font-bold text-indigo-700">{formatMXN(metrics.totals.ingresos || 0)}</div>
+                  <div className="text-xs text-gray-500 mt-1">Recibidos + Variables</div>
+                </div>
               </div>
-              <div className="p-4 rounded-lg border-2 border-red-200 bg-red-50">
-                <div className="text-sm text-gray-600 mb-1">Costo Total</div>
-                <div className="text-2xl font-bold text-red-700">{formatMXN(metrics.totals.costoLabor)}</div>
+
+              {/* Costos */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="p-4 rounded-lg border-2 border-red-200 bg-red-50">
+                  <div className="text-sm text-gray-600 mb-1">Costo de Nómina</div>
+                  <div className="text-2xl font-bold text-red-700">{formatMXN(metrics.totals.costoNomina || 0)}</div>
+                </div>
+                <div className="p-4 rounded-lg border-2 border-orange-200 bg-orange-50">
+                  <div className="text-sm text-gray-600 mb-1">Gastos del Mes</div>
+                  <div className="text-2xl font-bold text-orange-700">{formatMXN(metrics.totals.totalGastos || 0)}</div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    Fijos: {formatMXN(metrics.totals.gastosFijos || 0)} | 
+                    Variables: {formatMXN(metrics.totals.gastosVariables || 0)} | 
+                    MSI: {formatMXN(metrics.totals.gastosMSI || 0)}
+                  </div>
+                </div>
+                <div className="p-4 rounded-lg border-2 border-pink-200 bg-pink-50">
+                  <div className="text-sm text-gray-600 mb-1">Costo Laboral</div>
+                  <div className="text-2xl font-bold text-pink-700">{formatMXN(metrics.totals.costoLabor || 0)}</div>
+                  <div className="text-xs text-gray-500 mt-1">Horas trabajadas</div>
+                </div>
+                <div className="p-4 rounded-lg border-2 border-red-300 bg-red-100">
+                  <div className="text-sm text-gray-600 mb-1">Costo Total</div>
+                  <div className="text-2xl font-bold text-red-800">{formatMXN(metrics.totals.costoTotal || 0)}</div>
+                  <div className="text-xs text-gray-500 mt-1">Nómina + Gastos + Laboral</div>
+                </div>
               </div>
-              <div className="p-4 rounded-lg border-2 border-green-200 bg-green-50">
-                <div className="text-sm text-gray-600 mb-1">Ganancia</div>
-                <div className="text-2xl font-bold text-green-700">{formatMXN(metrics.totals.margenAbs)}</div>
-                <div className="text-xs text-gray-600 mt-1">
-                  {metrics.totals.margenPct !== null ? `${(metrics.totals.margenPct * 100).toFixed(1)}%` : 'N/A'} de margen
+
+              {/* Utilidad */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-lg border-2 border-green-300 bg-green-100">
+                  <div className="text-sm text-gray-600 mb-1">Utilidad del Mes</div>
+                  <div className={`text-2xl font-bold ${(metrics.totals.utilidad || 0) >= 0 ? 'text-green-800' : 'text-red-800'}`}>
+                    {formatMXN(metrics.totals.utilidad || 0)}
+                  </div>
+                  <div className="text-xs text-gray-600 mt-1">
+                    {metrics.totals.utilidadPct !== null 
+                      ? `${(metrics.totals.utilidadPct * 100).toFixed(1)}%` 
+                      : 'N/A'} de utilidad
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    Ingresos reales - Costos totales
+                  </div>
+                </div>
+                <div className="p-4 rounded-lg border-2 border-blue-300 bg-blue-100">
+                  <div className="text-sm text-gray-600 mb-1">Margen Esperado</div>
+                  <div className="text-2xl font-bold text-blue-800">{formatMXN(metrics.totals.margenAbs || 0)}</div>
+                  <div className="text-xs text-gray-600 mt-1">
+                    {metrics.totals.margenPct !== null 
+                      ? `${(metrics.totals.margenPct * 100).toFixed(1)}%` 
+                      : 'N/A'} de margen
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    Ingresos esperados - Costo laboral
+                  </div>
                 </div>
               </div>
             </div>

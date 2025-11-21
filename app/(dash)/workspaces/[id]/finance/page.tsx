@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Badge } from '@/components/ui/badge'
 import { useUsers, useProjects } from '@/lib/hooks/useApiCache'
 import { Edit, Trash2 } from 'lucide-react'
 
@@ -43,6 +44,7 @@ export default function FinancePage({ params }: { params: { id: string } }) {
     notes: '' 
   })
   const [billingForm, setBillingForm] = useState({ project_id: '', monthly_amount: '', payment_day: '1' })
+  const [billingStatusFilter, setBillingStatusFilter] = useState<string>('all') // 'all', 'active', 'paused', 'completed'
   const [worklogForm, setWorklogForm] = useState({ user_id: '', project_id: 'none', type: 'video', hours: '', date: '', notes: '' })
   const [incomeForm, setIncomeForm] = useState({ description: '', amount: '', date: '', project_id: '', notes: '' })
 
@@ -518,7 +520,25 @@ export default function FinancePage({ params }: { params: { id: string } }) {
 
         {/* Client billing */}
         <section className="bg-white rounded-lg shadow-sm border p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Facturación de clientes (mensual)</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Facturación de clientes (mensual)</h2>
+            <div className="flex items-center space-x-2">
+              <label className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                Filtrar por estado:
+              </label>
+              <Select value={billingStatusFilter} onValueChange={setBillingStatusFilter}>
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="active">Activos</SelectItem>
+                  <SelectItem value="paused">Pausados</SelectItem>
+                  <SelectItem value="completed">Completados</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
             <div className="md:col-span-2">
               <label className="block text-sm mb-1">Cliente/Proyecto</label>
@@ -547,15 +567,35 @@ export default function FinancePage({ params }: { params: { id: string } }) {
           </div>
 
           <div className="mt-6 divide-y">
-            {(Array.isArray(billings) ? billings : []).map((b) => (
-              <div key={b.id} className="py-2 text-sm flex justify-between">
-                <div>
-                  <span className="font-medium">{projects.find((p:any)=>p.id===b.project_id)?.name || 'Proyecto'}</span>
-                  <span className="text-gray-500"> · Paga día {b.payment_day}</span>
-                </div>
-                <div className="font-semibold">${b.monthly_amount}</div>
-              </div>
-            ))}
+            {(Array.isArray(billings) ? billings : [])
+              .filter((b) => {
+                if (billingStatusFilter === 'all') return true
+                const project = projects.find((p:any) => p.id === b.project_id)
+                return project?.status === billingStatusFilter
+              })
+              .map((b) => {
+                const project = projects.find((p:any)=>p.id===b.project_id)
+                return (
+                  <div key={b.id} className="py-2 text-sm flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{project?.name || 'Proyecto'}</span>
+                      <Badge 
+                        className={
+                          project?.status === 'active' 
+                            ? 'bg-green-100 text-green-700 border-green-300' 
+                            : project?.status === 'paused'
+                            ? 'bg-yellow-100 text-yellow-700 border-yellow-300'
+                            : 'bg-gray-100 text-gray-700 border-gray-300'
+                        }
+                      >
+                        {project?.status === 'active' ? 'Activo' : project?.status === 'paused' ? 'Pausado' : 'Completado'}
+                      </Badge>
+                      <span className="text-gray-500"> · Paga día {b.payment_day}</span>
+                    </div>
+                    <div className="font-semibold">${b.monthly_amount}</div>
+                  </div>
+                )
+              })}
           </div>
         </section>
 
