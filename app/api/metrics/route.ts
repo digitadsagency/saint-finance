@@ -5,6 +5,8 @@ function isValidMonth(m?: string | null) {
   return /^\d{4}-\d{2}$/.test(m)
 }
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
