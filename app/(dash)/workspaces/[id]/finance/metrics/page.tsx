@@ -23,6 +23,7 @@ export default function FinanceMetricsPage({ params }: { params: { id: string } 
   const [loadingMetrics, setLoadingMetrics] = useState(false)
   const [monthlyUtilidad, setMonthlyUtilidad] = useState<any[]>([])
   const [loadingMonthly, setLoadingMonthly] = useState(false)
+  const [loadingMonthly, setLoadingMonthly] = useState(false)
   const isAdmin = useMemo(() => {
     const name = (user?.name || '').toLowerCase()
     return name === 'miguel' || name === 'raul'
