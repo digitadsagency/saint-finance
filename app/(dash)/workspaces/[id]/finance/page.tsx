@@ -46,7 +46,7 @@ export default function FinancePage({ params }: { params: { id: string } }) {
   const [billingForm, setBillingForm] = useState({ project_id: '', monthly_amount: '', payment_day: '1' })
   const [billingStatusFilter, setBillingStatusFilter] = useState<string>('all') // 'all', 'active', 'paused', 'completed'
   const [worklogForm, setWorklogForm] = useState({ user_id: '', project_id: 'none', type: 'video', hours: '', date: '', notes: '' })
-  const [incomeForm, setIncomeForm] = useState({ description: '', amount: '', date: '', project_id: '', notes: '' })
+  const [incomeForm, setIncomeForm] = useState({ description: '', amount: '', date: '', project_id: 'none', notes: '' })
 
   const [salaries, setSalaries] = useState<any[]>([])
   const [billings, setBillings] = useState<any[]>([])
@@ -356,7 +356,7 @@ export default function FinancePage({ params }: { params: { id: string } }) {
         description: incomeForm.description,
         amount: Number(incomeForm.amount),
         date: incomeForm.date || new Date().toISOString().split('T')[0],
-        project_id: incomeForm.project_id || undefined,
+        project_id: incomeForm.project_id && incomeForm.project_id !== 'none' ? incomeForm.project_id : undefined,
         notes: incomeForm.notes
       })
     })
@@ -368,7 +368,7 @@ export default function FinancePage({ params }: { params: { id: string } }) {
       } else {
         setIncomes(prev => [rec, ...prev])
       }
-      setIncomeForm({ description: '', amount: '', date: '', project_id: '', notes: '' })
+      setIncomeForm({ description: '', amount: '', date: '', project_id: 'none', notes: '' })
       // Reload
       const incRes = await fetch(`/api/finance/incomes?workspaceId=${params.id}`)
       if (incRes.ok) {
@@ -387,7 +387,7 @@ export default function FinancePage({ params }: { params: { id: string } }) {
       description: income.description,
       amount: income.amount.toString(),
       date: income.date,
-      project_id: income.project_id || '',
+      project_id: income.project_id || 'none',
       notes: income.notes || ''
     })
   }
@@ -943,12 +943,12 @@ export default function FinancePage({ params }: { params: { id: string } }) {
             </div>
             <div>
               <label className="block text-sm mb-1">Cliente (opcional)</label>
-              <Select value={incomeForm.project_id} onValueChange={(v) => setIncomeForm(s => ({ ...s, project_id: v }))}>
+              <Select value={incomeForm.project_id || 'none'} onValueChange={(v) => setIncomeForm(s => ({ ...s, project_id: v === 'none' ? '' : v }))}>
                 <SelectTrigger>
                   <SelectValue placeholder="Sin cliente" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Sin cliente</SelectItem>
+                  <SelectItem value="none">Sin cliente</SelectItem>
                   {projects.map((p:any)=>(<SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>))}
                 </SelectContent>
               </Select>
@@ -956,7 +956,7 @@ export default function FinancePage({ params }: { params: { id: string } }) {
             <div>
               <Button onClick={submitIncome} disabled={!incomeForm.description || !incomeForm.amount}>{editingIncome ? 'Actualizar' : 'Guardar'}</Button>
               {editingIncome && (
-                <Button variant="outline" className="ml-2" onClick={() => { setEditingIncome(null); setIncomeForm({ description: '', amount: '', date: '', project_id: '', notes: '' }) }}>Cancelar</Button>
+                <Button variant="outline" className="ml-2" onClick={() => { setEditingIncome(null); setIncomeForm({ description: '', amount: '', date: '', project_id: 'none', notes: '' }) }}>Cancelar</Button>
               )}
             </div>
             <div className="md:col-span-6">
