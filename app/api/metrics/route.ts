@@ -446,14 +446,21 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Calcular ingresos esperados (de facturación mensual)
-    const ingresosEsperados = clients.reduce((s,c)=> s+(c.revenue||0),0)
+    // Calcular ingresos esperados (de facturación mensual de clientes)
+    // Los ingresos esperados vienen de la facturación mensual (billings)
+    const ingresosEsperados = (billings || []).reduce((sum: number, b: any) => sum + (Number(b.monthly_amount) || 0), 0)
+    
+    // También sumar los ingresos esperados de los clientes calculados (revenue)
+    const ingresosEsperadosClientes = clients.reduce((s: number, c: any) => s + (Number(c.revenue) || 0), 0)
+    
+    // Usar el mayor entre billings y revenue de clientes
+    const ingresosEsperadosTotal = Math.max(ingresosEsperados, ingresosEsperadosClientes)
     
     // Calcular ingresos reales (pagos recibidos en el mes)
-    const ingresosReales = payments.reduce((sum, p) => sum + (Number(p.paid_amount) || 0), 0)
+    const ingresosReales = (payments || []).reduce((sum: number, p: any) => sum + (Number(p.paid_amount) || 0), 0)
     
     // Calcular ingresos variables del mes
-    const ingresosVariables = incomes
+    const ingresosVariables = (incomes || [])
       .filter((inc: any) => (inc.date || '').startsWith(monthPrefix))
       .reduce((sum: number, inc: any) => sum + (Number(inc.amount) || 0), 0)
     
@@ -461,21 +468,21 @@ export async function GET(request: NextRequest) {
     const ingresos = ingresosReales + ingresosVariables
     
     // Calcular gastos del mes
-    const gastosFijos = expenses
+    const gastosFijos = (expenses || [])
       .filter((e: any) => e.expense_type === 'fixed' && !e.is_installment && (e.date || '').startsWith(monthPrefix))
       .reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0)
     
-    const gastosVariables = expenses
+    const gastosVariables = (expenses || [])
       .filter((e: any) => e.expense_type === 'variable' && !e.is_installment && (e.date || '').startsWith(monthPrefix))
       .reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0)
     
     // Gastos a meses sin intereses (solo el pago mensual del mes actual)
-    const gastosMSI = expenses
+    const gastosMSI = (expenses || [])
       .filter((e: any) => e.is_installment && (e.date || '').startsWith(monthPrefix))
       .reduce((sum: number, e: any) => sum + (Number(e.monthly_payment) || 0), 0)
     
     // También incluir pagos mensuales de MSI de meses anteriores que caen en este mes
-    const gastosMSIMesActual = expenses
+    const gastosMSIMesActual = (expenses || [])
       .filter((e: any) => {
         if (!e.is_installment || !e.date || !e.installment_months) return false
         const expenseDate = new Date(e.date)
@@ -484,7 +491,7 @@ export async function GET(request: NextRequest) {
         const [year, month] = m.split('-').map(Number)
         
         // Verificar si este mes corresponde a algún pago de la serie de MSI
-        for (let i = 0; i < e.installment_months; i++) {
+        for (let i = 0; i < (e.installment_months || 0); i++) {
           const paymentMonth = new Date(expenseYear, expenseMonth + i, 1)
           if (paymentMonth.getFullYear() === year && paymentMonth.getMonth() + 1 === month) {
             return true
@@ -497,7 +504,7 @@ export async function GET(request: NextRequest) {
     const totalGastos = gastosFijos + gastosVariables + gastosMSIMesActual
     
     // Costo de nómina (sueldos mensuales)
-    const costoNomina = salaries.reduce((sum: number, s: any) => sum + (Number(s.monthly_salary) || 0), 0)
+    const costoNomina = (salaries || []).reduce((sum: number, s: any) => sum + (Number(s.monthly_salary) || 0), 0)
     
     // Costo laboral (horas trabajadas)
     const costoLabor = clients.reduce((s,c)=> s+(c.costoLabor||0),0)
@@ -510,8 +517,8 @@ export async function GET(request: NextRequest) {
     const utilidadPct = ingresos > 0 ? +(utilidad / ingresos).toFixed(2) : null
     
     // Margen (usando ingresos esperados para comparación)
-    const margenAbs = ingresosEsperados - costoLabor
-    const margenPct = ingresosEsperados>0 ? +(margenAbs/ingresosEsperados).toFixed(2) : null
+    const margenAbs = ingresosEsperadosTotal - costoLabor
+    const margenPct = ingresosEsperadosTotal>0 ? +(margenAbs/ingresosEsperadosTotal).toFixed(2) : null
     const utilizacionPromedioEquipo = employees.length>0 ? (employees.reduce((s,e)=> s+e.utilizacion,0)/employees.length) : 0
 
     // Métricas por tipo específico (reel_corto, reel_largo, diseno_simple, etc.)
@@ -780,7 +787,7 @@ export async function GET(request: NextRequest) {
       stagesByEmployee, 
       totals: { 
         ingresos, 
-        ingresosEsperados,
+        ingresosEsperados: ingresosEsperadosTotal,
         ingresosReales,
         ingresosVariables,
         costoLabor, 
