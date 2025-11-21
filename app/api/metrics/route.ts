@@ -35,6 +35,20 @@ export async function GET(request: NextRequest) {
     // Debug: Log data counts
     console.log(`[Metrics] Month: ${m}, Workspace: ${workspaceId}`)
     console.log(`[Metrics] Data counts: salaries=${salaries?.length || 0}, billings=${billings?.length || 0}, projects=${projects?.length || 0}, expenses=${expenses?.length || 0}, incomes=${incomes?.length || 0}, payments=${payments?.length || 0}`)
+    
+    // Log sample data to verify structure
+    if (billings && billings.length > 0) {
+      console.log(`[Metrics] Sample billing:`, JSON.stringify(billings[0]))
+    }
+    if (salaries && salaries.length > 0) {
+      console.log(`[Metrics] Sample salary:`, JSON.stringify(salaries[0]))
+    }
+    if (expenses && expenses.length > 0) {
+      const fixedExpenses = expenses.filter((e: any) => e && e.expense_type === 'fixed' && !e.is_installment)
+      if (fixedExpenses.length > 0) {
+        console.log(`[Metrics] Sample fixed expense:`, JSON.stringify(fixedExpenses[0]))
+      }
+    }
 
     // Mapear nombres de empleados
     const userNameById = new Map<string, string>()
@@ -487,13 +501,20 @@ export async function GET(request: NextRequest) {
     const ingresos = ingresosReales + ingresosVariables
     
     // Calcular gastos del mes
-    // Los gastos fijos son mensuales recurrentes, se muestran siempre (no se filtran por fecha)
+    // Los gastos fijos son mensuales recurrentes, se muestran SIEMPRE (no se filtran por fecha)
     const gastosFijos = (expenses || [])
-      .filter((e: any) => e.expense_type === 'fixed' && !e.is_installment)
-      .reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0)
+      .filter((e: any) => e && e.expense_type === 'fixed' && !e.is_installment)
+      .reduce((sum: number, e: any) => {
+        const amount = Number(e.amount) || 0
+        if (amount > 0) {
+          console.log(`[Metrics] Fixed expense found: ${e.description}, amount=${amount}`)
+        }
+        return sum + amount
+      }, 0)
     
+    // Los gastos variables sí se filtran por fecha del mes
     const gastosVariables = (expenses || [])
-      .filter((e: any) => e.expense_type === 'variable' && !e.is_installment && (e.date || '').startsWith(monthPrefix))
+      .filter((e: any) => e && e.expense_type === 'variable' && !e.is_installment && (e.date || '').startsWith(monthPrefix))
       .reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0)
     
     // Gastos a meses sin intereses (solo el pago mensual del mes actual)
