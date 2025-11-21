@@ -12,7 +12,9 @@ import {
   Calendar,
   CheckCircle,
   Clock,
-  AlertCircle
+  AlertCircle,
+  Edit,
+  Trash2
 } from 'lucide-react'
 import { useAuth } from '@/lib/useAuth'
 import { ClientCreationModal } from '@/components/ProjectCreationModal'
@@ -30,6 +32,7 @@ export default function AllClientsPage({ params }: { params: { id: string } }) {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState<string>('name')
+  const [statusFilter, setStatusFilter] = useState<string>('all') // 'all', 'active', 'paused', 'completed'
   const [showClientCreation, setShowClientCreation] = useState(false)
   const [showClientEdit, setShowClientEdit] = useState(false)
   const [selectedClient, setSelectedClient] = useState<any>(null)
@@ -122,13 +125,47 @@ export default function AllClientsPage({ params }: { params: { id: string } }) {
     success('Cliente creado', 'El nuevo cliente se ha creado exitosamente')
   }
 
-  const handleClientUpdate = (updatedClient: any) => {
+  const handleClientUpdate = async (updatedClient: any) => {
     setClients(prevClients => 
       prevClients.map(c => c.id === updatedClient.id ? updatedClient : c)
     )
     success('Cliente actualizado', 'Los cambios se han guardado exitosamente')
     setShowClientEdit(false)
     setSelectedClient(null)
+    // Reload data
+    const clientsResponse = await fetch(`/api/projects?workspaceId=${params.id}`)
+    if (clientsResponse.ok) {
+      const clientsData = await clientsResponse.json()
+      setClients(clientsData)
+    }
+  }
+
+  const handleDeleteClient = async (clientId: string) => {
+    if (!confirm('¿Estás seguro de que quieres eliminar este cliente? Esta acción no se puede deshacer.')) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/projects?id=${clientId}`, {
+        method: 'DELETE'
+      })
+
+      if (response.ok) {
+        setClients(prevClients => prevClients.filter(c => c.id !== clientId))
+        success('Cliente eliminado', 'El cliente se ha eliminado exitosamente')
+        // Reload data
+        const clientsResponse = await fetch(`/api/projects?workspaceId=${params.id}`)
+        if (clientsResponse.ok) {
+          const clientsData = await clientsResponse.json()
+          setClients(clientsData)
+        }
+      } else {
+        const errorData = await response.json()
+        error('Error al eliminar', errorData.error || 'No se pudo eliminar el cliente')
+      }
+    } catch (err) {
+      error('Error al eliminar', 'Ocurrió un error al intentar eliminar el cliente')
+    }
   }
 
   // Calculate client metrics for sorting
@@ -193,10 +230,16 @@ export default function AllClientsPage({ params }: { params: { id: string } }) {
   }
 
   // Filter and sort clients
-  let filteredClients = clients.filter(client =>
-    client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (client.description && client.description.toLowerCase().includes(searchQuery.toLowerCase()))
-  )
+  let filteredClients = clients.filter(client => {
+    // Search filter
+    const matchesSearch = client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (client.description && client.description.toLowerCase().includes(searchQuery.toLowerCase()))
+    
+    // Status filter
+    const matchesStatus = statusFilter === 'all' || client.status === statusFilter
+    
+    return matchesSearch && matchesStatus
+  })
   
   // Sort clients based on selected filter
   filteredClients = [...filteredClients].sort((a, b) => {
@@ -285,29 +328,46 @@ export default function AllClientsPage({ params }: { params: { id: string } }) {
             />
           </div>
           
-          {/* Filter Selector */}
-          <div className="flex items-center space-x-2">
-            <label className="text-sm font-medium text-gray-700 whitespace-nowrap">
-              Ordenar por:
-            </label>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="name">Nombre (A-Z)</option>
-              <option value="highest_payment">Mayor pago mensual</option>
-              <option value="lowest_payment">Menor pago mensual</option>
-                 <option value="most_delayed">Más retraso promedio en pagos</option>
-                 <option value="least_delayed">Menos retraso promedio en pagos</option>
-                 <option value="most_total_delay">Más días de retraso acumulado</option>
-                 <option value="most_punctual">Más puntual (pagos a tiempo)</option>
-              <option value="most_videos">Más videos al mes</option>
-              <option value="most_designs">Más diseños al mes</option>
-              <option value="most_photos">Más fotos al mes</option>
-              <option value="most_deliverables">Más entregables al mes</option>
-              <option value="most_tasks">Más tareas totales</option>
-            </select>
+          {/* Filter Selectors */}
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
+              <label className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                Estado:
+              </label>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">Todos</option>
+                <option value="active">Activos</option>
+                <option value="paused">Pausados</option>
+                <option value="completed">Completados</option>
+              </select>
+            </div>
+            <div className="flex items-center space-x-2 flex-1">
+              <label className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                Ordenar por:
+              </label>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="name">Nombre (A-Z)</option>
+                <option value="highest_payment">Mayor pago mensual</option>
+                <option value="lowest_payment">Menor pago mensual</option>
+                   <option value="most_delayed">Más retraso promedio en pagos</option>
+                   <option value="least_delayed">Menos retraso promedio en pagos</option>
+                   <option value="most_total_delay">Más días de retraso acumulado</option>
+                   <option value="most_punctual">Más puntual (pagos a tiempo)</option>
+                <option value="most_videos">Más videos al mes</option>
+                <option value="most_designs">Más diseños al mes</option>
+                <option value="most_photos">Más fotos al mes</option>
+                <option value="most_deliverables">Más entregables al mes</option>
+                <option value="most_tasks">Más tareas totales</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -351,19 +411,32 @@ export default function AllClientsPage({ params }: { params: { id: string } }) {
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex-1">
-                      <h3 
-                        className="text-lg font-semibold text-gray-900 mb-1 cursor-pointer hover:text-blue-600"
-                        onClick={() => router.push(`/workspaces/${params.id}/projects/${client.id}/clickup-list`)}
-                      >
-                        {client.name}
-                      </h3>
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 
+                          className="text-lg font-semibold text-gray-900 cursor-pointer hover:text-blue-600"
+                          onClick={() => router.push(`/workspaces/${params.id}/projects/${client.id}/clickup-list`)}
+                        >
+                          {client.name}
+                        </h3>
+                        <Badge 
+                          className={
+                            client.status === 'active' 
+                              ? 'bg-green-100 text-green-700 border-green-300' 
+                              : client.status === 'paused'
+                              ? 'bg-yellow-100 text-yellow-700 border-yellow-300'
+                              : 'bg-gray-100 text-gray-700 border-gray-300'
+                          }
+                        >
+                          {client.status === 'active' ? 'Activo' : client.status === 'paused' ? 'Pausado' : 'Completado'}
+                        </Badge>
+                      </div>
                       {client.description && (
                         <p className="text-sm text-gray-600 line-clamp-2">
                           {client.description}
                         </p>
                       )}
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-1">
                       <Button
                         variant="ghost"
                         size="sm"
@@ -373,10 +446,21 @@ export default function AllClientsPage({ params }: { params: { id: string } }) {
                           setShowClientEdit(true)
                         }}
                         className="h-8 w-8 p-0"
+                        title="Editar cliente"
                       >
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDeleteClient(client.id)
+                        }}
+                        className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                        title="Eliminar cliente"
+                      >
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                       <FolderOpen 
                         className="h-5 w-5 text-gray-400 flex-shrink-0 cursor-pointer hover:text-blue-600"

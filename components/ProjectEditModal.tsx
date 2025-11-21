@@ -16,6 +16,7 @@ export function ProjectEditModal({ isOpen, onClose, onProjectUpdated, project }:
   const [formData, setFormData] = useState({
     name: '',
     description: '',
+    status: 'active' as 'active' | 'paused' | 'completed',
     // Audiovisual/Video
     monthly_reel_corto: 0,
     monthly_reel_largo: 0,
@@ -39,6 +40,7 @@ export function ProjectEditModal({ isOpen, onClose, onProjectUpdated, project }:
       setFormData({
         name: project.name || '',
         description: project.description || '',
+        status: project.status || 'active',
         monthly_reel_corto: project.monthly_reel_corto || 0,
         monthly_reel_largo: project.monthly_reel_largo || 0,
         monthly_reel: project.monthly_reel || 0,
@@ -69,7 +71,7 @@ export function ProjectEditModal({ isOpen, onClose, onProjectUpdated, project }:
         body: JSON.stringify({
           name: formData.name,
           description: formData.description,
-          status: project.status || 'active',
+          status: formData.status,
           priority: project.priority || 'medium',
           deadline: project.deadline || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
           // Audiovisual/Video
@@ -148,6 +150,21 @@ export function ProjectEditModal({ isOpen, onClose, onProjectUpdated, project }:
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               rows={3}
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Estado
+            </label>
+            <select
+              value={formData.status}
+              onChange={(e) => setFormData({ ...formData, status: e.target.value as 'active' | 'paused' | 'completed' })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="active">Activo</option>
+              <option value="paused">Pausado</option>
+              <option value="completed">Completado</option>
+            </select>
           </div>
 
           {/* Audiovisual/Video */}
