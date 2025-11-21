@@ -523,17 +523,26 @@ export async function GET(request: NextRequest) {
     
     const totalGastos = gastosFijos + gastosVariables + gastosMSIMesActual
     
-    // Costo de nómina (sueldos mensuales)
+    // Costo de nómina (sueldos mensuales) - SIEMPRE se muestra, no depende del mes
     const costoNomina = (salaries || []).reduce((sum: number, s: any) => {
       const salary = Number(s.monthly_salary) || 0
+      if (salary > 0) {
+        console.log(`[Metrics] Salary found: user_id=${s.user_id}, monthly_salary=${salary}`)
+      }
       return sum + salary
     }, 0)
     
     // Costo laboral (horas trabajadas)
-    const costoLabor = clients.reduce((s,c)=> s+(c.costoLabor||0),0)
+    const costoLabor = clients.reduce((s: number, c: any) => {
+      const labor = Number(c.costoLabor) || 0
+      return s + labor
+    }, 0)
     
     // Costo total = nómina + gastos + costo laboral
     const costoTotal = costoNomina + totalGastos + costoLabor
+    
+    console.log(`[Metrics] Costos: nómina=${costoNomina}, gastos=${totalGastos}, laboral=${costoLabor}, total=${costoTotal}`)
+    console.log(`[Metrics] Salaries array length: ${(salaries || []).length}, Expenses array length: ${(expenses || []).length}`)
     
     // Utilidad = ingresos reales - costos totales
     const utilidad = ingresos - costoTotal
