@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useUsers, useProjects } from '@/lib/hooks/useApiCache'
+import { Edit, Trash2 } from 'lucide-react'
 
 export default function FinancePage({ params }: { params: { id: string } }) {
   const { user, loading } = useAuth()
@@ -43,26 +44,33 @@ export default function FinancePage({ params }: { params: { id: string } }) {
   })
   const [billingForm, setBillingForm] = useState({ project_id: '', monthly_amount: '', payment_day: '1' })
   const [worklogForm, setWorklogForm] = useState({ user_id: '', project_id: 'none', type: 'video', hours: '', date: '', notes: '' })
+  const [incomeForm, setIncomeForm] = useState({ description: '', amount: '', date: '', project_id: '', notes: '' })
 
   const [salaries, setSalaries] = useState<any[]>([])
   const [billings, setBillings] = useState<any[]>([])
   const [worklogs, setWorklogs] = useState<any[]>([])
   const [expenses, setExpenses] = useState<any[]>([])
+  const [incomes, setIncomes] = useState<any[]>([])
+  const [editingSalary, setEditingSalary] = useState<any | null>(null)
+  const [editingExpense, setEditingExpense] = useState<any | null>(null)
+  const [editingIncome, setEditingIncome] = useState<any | null>(null)
 
   // Load data
   useEffect(() => {
     const load = async () => {
       try {
-        const [sal, bil, wl, exp] = await Promise.all([
+        const [sal, bil, wl, exp, inc] = await Promise.all([
           fetch(`/api/finance/salaries?workspaceId=${params.id}`).then(async r => (r.ok ? r.json() : [])),
           fetch(`/api/finance/client-billing?workspaceId=${params.id}`).then(async r => (r.ok ? r.json() : [])),
           fetch(`/api/finance/worklogs?workspaceId=${params.id}`).then(async r => (r.ok ? r.json() : [])),
-          fetch(`/api/finance/expenses?workspaceId=${params.id}`).then(async r => (r.ok ? r.json() : []))
+          fetch(`/api/finance/expenses?workspaceId=${params.id}`).then(async r => (r.ok ? r.json() : [])),
+          fetch(`/api/finance/incomes?workspaceId=${params.id}`).then(async r => (r.ok ? r.json() : []))
         ])
         setSalaries(Array.isArray(sal) ? sal : [])
         setBillings(Array.isArray(bil) ? bil : [])
         setWorklogs(Array.isArray(wl) ? wl : [])
         setExpenses(Array.isArray(exp) ? exp : [])
+        setIncomes(Array.isArray(inc) ? inc : [])
       } catch {}
     }
     if (isAdmin) load()
@@ -72,10 +80,12 @@ export default function FinancePage({ params }: { params: { id: string } }) {
 
   // Handlers
   const submitSalary = async () => {
+    const isEditing = !!editingSalary
     const res = await fetch('/api/finance/salaries', {
-      method: 'POST',
+      method: isEditing ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        id: editingSalary?.id,
         current_user: currentUserName,
         workspace_id: params.id,
         user_id: salaryForm.user_id,
@@ -85,11 +95,49 @@ export default function FinancePage({ params }: { params: { id: string } }) {
     })
     if (res.ok) {
       const rec = await res.json()
-      setSalaries(prev => [rec, ...prev])
+      if (isEditing) {
+        setSalaries(prev => prev.map(s => s.id === editingSalary.id ? rec : s))
+        setEditingSalary(null)
+      } else {
+        setSalaries(prev => [rec, ...prev])
+      }
       setSalaryForm({ user_id: '', monthly_salary: '', notes: '' })
+      // Reload
+      const salRes = await fetch(`/api/finance/salaries?workspaceId=${params.id}`)
+      if (salRes.ok) {
+        const salData = await salRes.json()
+        setSalaries(Array.isArray(salData) ? salData : [])
+      }
     } else {
       const err = await res.json().catch(()=>({ error: 'Error desconocido' }))
-      alert(`Error al guardar sueldo: ${err.error || res.statusText}`)
+      alert(`Error al ${isEditing ? 'actualizar' : 'guardar'} sueldo: ${err.error || res.statusText}`)
+    }
+  }
+
+  const handleEditSalary = (salary: any) => {
+    setEditingSalary(salary)
+    setSalaryForm({
+      user_id: salary.user_id,
+      monthly_salary: salary.monthly_salary.toString(),
+      notes: salary.notes || ''
+    })
+  }
+
+  const handleDeleteSalary = async (id: string) => {
+    if (!confirm('¿Estás seguro de que quieres eliminar este sueldo?')) return
+    const res = await fetch(`/api/finance/salaries?id=${id}&current_user=${encodeURIComponent(currentUserName)}`, {
+      method: 'DELETE'
+    })
+    if (res.ok) {
+      setSalaries(prev => prev.filter(s => s.id !== id))
+      const salRes = await fetch(`/api/finance/salaries?workspaceId=${params.id}`)
+      if (salRes.ok) {
+        const salData = await salRes.json()
+        setSalaries(Array.isArray(salData) ? salData : [])
+      }
+    } else {
+      const err = await res.json().catch(() => ({ error: 'Error desconocido' }))
+      alert(`Error al eliminar sueldo: ${err.error || res.statusText}`)
     }
   }
 
@@ -141,10 +189,12 @@ export default function FinancePage({ params }: { params: { id: string } }) {
   }
 
   const submitExpense = async () => {
+    const isEditing = !!editingExpense
     const res = await fetch('/api/finance/expenses', {
-      method: 'POST',
+      method: isEditing ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        id: editingExpense?.id,
         current_user: currentUserName,
         workspace_id: params.id,
         description: expenseForm.description,
@@ -165,9 +215,107 @@ export default function FinancePage({ params }: { params: { id: string } }) {
         setExpenses(Array.isArray(expensesData) ? expensesData : [])
       }
       setExpenseForm({ description: '', amount: '', expense_type: 'fixed', date: '', is_installment: false, installment_months: '', notes: '' })
+      setEditingExpense(null)
     } else {
       const err = await res.json().catch(()=>({ error: 'Error desconocido' }))
-      alert(`Error al guardar gasto: ${err.error || res.statusText}`)
+      alert(`Error al ${isEditing ? 'actualizar' : 'guardar'} gasto: ${err.error || res.statusText}`)
+    }
+  }
+
+  const handleEditExpense = (expense: any) => {
+    setEditingExpense(expense)
+    setExpenseForm({
+      description: expense.description,
+      amount: expense.amount.toString(),
+      expense_type: expense.expense_type,
+      date: expense.date,
+      is_installment: expense.is_installment || false,
+      installment_months: expense.installment_months?.toString() || '',
+      notes: expense.notes || ''
+    })
+  }
+
+  const handleDeleteExpense = async (id: string) => {
+    if (!confirm('¿Estás seguro de que quieres eliminar este gasto?')) return
+    const res = await fetch(`/api/finance/expenses?id=${id}&current_user=${encodeURIComponent(currentUserName)}`, {
+      method: 'DELETE'
+    })
+    if (res.ok) {
+      setExpenses(prev => prev.filter(e => e.id !== id))
+      const expRes = await fetch(`/api/finance/expenses?workspaceId=${params.id}`)
+      if (expRes.ok) {
+        const expensesData = await expRes.json()
+        setExpenses(Array.isArray(expensesData) ? expensesData : [])
+      }
+    } else {
+      const err = await res.json().catch(() => ({ error: 'Error desconocido' }))
+      alert(`Error al eliminar gasto: ${err.error || res.statusText}`)
+    }
+  }
+
+  const submitIncome = async () => {
+    const isEditing = !!editingIncome
+    const res = await fetch('/api/finance/incomes', {
+      method: isEditing ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: editingIncome?.id,
+        current_user: currentUserName,
+        workspace_id: params.id,
+        description: incomeForm.description,
+        amount: Number(incomeForm.amount),
+        date: incomeForm.date || new Date().toISOString().split('T')[0],
+        project_id: incomeForm.project_id || undefined,
+        notes: incomeForm.notes
+      })
+    })
+    if (res.ok) {
+      const rec = await res.json()
+      if (isEditing) {
+        setIncomes(prev => prev.map(i => i.id === editingIncome.id ? rec : i))
+        setEditingIncome(null)
+      } else {
+        setIncomes(prev => [rec, ...prev])
+      }
+      setIncomeForm({ description: '', amount: '', date: '', project_id: '', notes: '' })
+      // Reload
+      const incRes = await fetch(`/api/finance/incomes?workspaceId=${params.id}`)
+      if (incRes.ok) {
+        const incomesData = await incRes.json()
+        setIncomes(Array.isArray(incomesData) ? incomesData : [])
+      }
+    } else {
+      const err = await res.json().catch(()=>({ error: 'Error desconocido' }))
+      alert(`Error al ${isEditing ? 'actualizar' : 'guardar'} ingreso: ${err.error || res.statusText}`)
+    }
+  }
+
+  const handleEditIncome = (income: any) => {
+    setEditingIncome(income)
+    setIncomeForm({
+      description: income.description,
+      amount: income.amount.toString(),
+      date: income.date,
+      project_id: income.project_id || '',
+      notes: income.notes || ''
+    })
+  }
+
+  const handleDeleteIncome = async (id: string) => {
+    if (!confirm('¿Estás seguro de que quieres eliminar este ingreso?')) return
+    const res = await fetch(`/api/finance/incomes?id=${id}&current_user=${encodeURIComponent(currentUserName)}`, {
+      method: 'DELETE'
+    })
+    if (res.ok) {
+      setIncomes(prev => prev.filter(i => i.id !== id))
+      const incRes = await fetch(`/api/finance/incomes?workspaceId=${params.id}`)
+      if (incRes.ok) {
+        const incomesData = await incRes.json()
+        setIncomes(Array.isArray(incomesData) ? incomesData : [])
+      }
+    } else {
+      const err = await res.json().catch(() => ({ error: 'Error desconocido' }))
+      alert(`Error al eliminar ingreso: ${err.error || res.statusText}`)
     }
   }
 
@@ -177,9 +325,31 @@ export default function FinancePage({ params }: { params: { id: string } }) {
     
     // Agrupar gastos por mes
     expenses.forEach((e: any) => {
-      if (!e.date) return
+      if (!e.date) {
+        console.warn('Expense without date:', e)
+        return
+      }
       
-      const expenseDate = new Date(e.date)
+      // Intentar parsear la fecha de diferentes formas
+      let expenseDate: Date
+      if (typeof e.date === 'string') {
+        // Si es string YYYY-MM-DD, parsear localmente
+        if (e.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          const [y, m, d] = e.date.split('-').map(Number)
+          expenseDate = new Date(y, (m || 1) - 1, d || 1)
+        } else {
+          expenseDate = new Date(e.date)
+        }
+      } else {
+        expenseDate = new Date(e.date)
+      }
+      
+      // Validar que la fecha sea válida
+      if (isNaN(expenseDate.getTime())) {
+        console.warn('Invalid date for expense:', e.date, e)
+        return
+      }
+      
       const expenseYear = expenseDate.getFullYear()
       const expenseMonth = expenseDate.getMonth()
       
@@ -314,7 +484,10 @@ export default function FinancePage({ params }: { params: { id: string } }) {
               <Input value={salaryForm.monthly_salary} onChange={e => setSalaryForm(s => ({ ...s, monthly_salary: e.target.value }))} type="number" min="0" step="0.01" />
             </div>
             <div>
-              <Button onClick={submitSalary} disabled={!salaryForm.user_id || !salaryForm.monthly_salary}>Guardar</Button>
+              <Button onClick={submitSalary} disabled={!salaryForm.user_id || !salaryForm.monthly_salary}>{editingSalary ? 'Actualizar' : 'Guardar'}</Button>
+              {editingSalary && (
+                <Button variant="outline" className="ml-2" onClick={() => { setEditingSalary(null); setSalaryForm({ user_id: '', monthly_salary: '', notes: '' }) }}>Cancelar</Button>
+              )}
             </div>
             <div className="md:col-span-4">
               <label className="block text-sm mb-1">Notas</label>
@@ -324,12 +497,20 @@ export default function FinancePage({ params }: { params: { id: string } }) {
 
           <div className="mt-6 divide-y">
             {currentSalaries.map((s) => (
-              <div key={s.id} className="py-2 text-sm flex justify-between">
+              <div key={s.id} className="py-2 text-sm flex justify-between items-center group">
                 <div>
                   <span className="font-medium">{users.find((u:any)=>u.id===s.user_id)?.name || 'Empleado'}</span>
                   {s.notes && <span className="text-gray-500"> · {s.notes}</span>}
                 </div>
-                <div className="font-semibold">{s.monthly_salary.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}</div>
+                <div className="flex items-center gap-2">
+                  <div className="font-semibold">{s.monthly_salary.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}</div>
+                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => handleEditSalary(s)}>
+                    <Edit className="h-3 w-3" />
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-red-600 hover:text-red-700" onClick={() => handleDeleteSalary(s.id)}>
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
               </div>
             ))}
           </div>
@@ -496,7 +677,10 @@ export default function FinancePage({ params }: { params: { id: string } }) {
               <Input value={expenseForm.date} onChange={e => setExpenseForm(s => ({ ...s, date: e.target.value }))} type="date" />
             </div>
             <div>
-              <Button onClick={submitExpense} disabled={!expenseForm.description || !expenseForm.amount}>Guardar</Button>
+              <Button onClick={submitExpense} disabled={!expenseForm.description || !expenseForm.amount}>{editingExpense ? 'Actualizar' : 'Guardar'}</Button>
+              {editingExpense && (
+                <Button variant="outline" className="ml-2" onClick={() => { setEditingExpense(null); setExpenseForm({ description: '', amount: '', expense_type: 'fixed', date: '', is_installment: false, installment_months: '', notes: '' }) }}>Cancelar</Button>
+              )}
             </div>
             <div className="md:col-span-6 flex items-center gap-4">
               <div className="flex items-center gap-2">
@@ -548,7 +732,7 @@ export default function FinancePage({ params }: { params: { id: string } }) {
                 </div>
                 <div className="space-y-2">
                   {monthData.expenses.map((e: any) => (
-                    <div key={`${e.id}-${e.payment_month || ''}`} className="py-2 text-sm flex justify-between items-center bg-gray-50 px-3 rounded">
+                    <div key={`${e.id}-${e.payment_month || ''}`} className="py-2 text-sm flex justify-between items-center bg-gray-50 px-3 rounded group">
                       <div className="flex-1">
                         <span className="font-medium">{e.description}</span>
                         <span className={`ml-2 px-2 py-0.5 text-xs rounded-full ${e.expense_type === 'fixed' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
@@ -567,7 +751,19 @@ export default function FinancePage({ params }: { params: { id: string } }) {
                         {e.date && <span className="text-gray-500 ml-2"> · {new Date(e.date).toLocaleDateString('es-ES')}</span>}
                         {e.notes && <span className="text-gray-500 ml-2"> · {e.notes}</span>}
                       </div>
-                      <div className="font-semibold">{Number(e.amount).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="font-semibold">{Number(e.amount).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}</div>
+                        {!e.is_installment_payment && (
+                          <>
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => handleEditExpense(e)}>
+                              <Edit className="h-3 w-3" />
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-red-600 hover:text-red-700" onClick={() => handleDeleteExpense(e.id)}>
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>

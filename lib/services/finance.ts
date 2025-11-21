@@ -52,6 +52,18 @@ export interface ExpenseRecord {
   updated_at: string
 }
 
+export interface IncomeRecord {
+  id: string
+  workspace_id: string
+  description: string
+  amount: number
+  date: string // YYYY-MM-DD
+  project_id?: string // Cliente/proyecto relacionado (opcional)
+  notes?: string
+  created_at: string
+  updated_at: string
+}
+
 export type WorklogType = 'video' | 'design' | 'photo' | 'other'
 
 export interface WorklogRecord {
@@ -490,6 +502,329 @@ export class FinanceService {
       created_at: now, 
       updated_at: now 
     }
+  }
+
+  static async updateExpense(id: string, data: Partial<Omit<ExpenseRecord, 'id' | 'created_at' | 'workspace_id'>>): Promise<ExpenseRecord> {
+    await this.ensureSheetExists('expenses', ['id','workspace_id','description','amount','expense_type','date','is_installment','installment_months','monthly_payment','notes','created_at','updated_at'])
+    const { sheets, spreadsheetId } = await this.getSheet()
+    
+    // Get existing record
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: 'expenses!A2:L10000'
+    })
+    const rows = res.data.values || []
+    const rowIndex = rows.findIndex(r => r[0] === id)
+    
+    if (rowIndex === -1) {
+      throw new Error('Expense not found')
+    }
+    
+    const existingRow = rows[rowIndex]
+    const existingRecord: ExpenseRecord = {
+      id: existingRow[0],
+      workspace_id: existingRow[1],
+      description: existingRow[2],
+      amount: parseFloat(existingRow[3] || '0'),
+      expense_type: (existingRow[4] || 'variable') as 'fixed' | 'variable',
+      date: existingRow[5],
+      is_installment: existingRow[6] === 'true' || existingRow[6] === true,
+      installment_months: parseInt(existingRow[7] || '0') || 0,
+      monthly_payment: parseFloat(existingRow[8] || '0'),
+      notes: existingRow[9],
+      created_at: existingRow[10],
+      updated_at: existingRow[11]
+    }
+    
+    // Merge with new data
+    const updatedData = {
+      ...existingRecord,
+      ...data
+    }
+    
+    // Recalculate monthly_payment if needed
+    const isInstallment = updatedData.is_installment || false
+    const installmentMonths = updatedData.installment_months || 0
+    const monthlyPayment = isInstallment && installmentMonths > 0 
+      ? updatedData.amount / installmentMonths 
+      : (updatedData.monthly_payment || 0)
+    
+    const now = new Date().toISOString()
+    const updatedRow = [
+      existingRecord.id,
+      existingRecord.workspace_id,
+      updatedData.description,
+      updatedData.amount,
+      updatedData.expense_type,
+      updatedData.date,
+      isInstallment ? 'true' : 'false',
+      installmentMonths || '',
+      monthlyPayment || '',
+      updatedData.notes || '',
+      existingRecord.created_at,
+      now
+    ]
+    
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `expenses!A${rowIndex + 2}:L${rowIndex + 2}`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [updatedRow] }
+    })
+    
+    return {
+      ...updatedData,
+      monthly_payment: monthlyPayment,
+      updated_at: now
+    }
+  }
+
+  static async deleteExpense(id: string): Promise<void> {
+    await this.ensureSheetExists('expenses', ['id','workspace_id','description','amount','expense_type','date','is_installment','installment_months','monthly_payment','notes','created_at','updated_at'])
+    const { sheets, spreadsheetId } = await this.getSheet()
+    
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: 'expenses!A2:L10000'
+    })
+    const rows = res.data.values || []
+    const rowIndex = rows.findIndex(r => r[0] === id)
+    
+    if (rowIndex === -1) {
+      throw new Error('Expense not found')
+    }
+    
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [{
+          deleteDimension: {
+            range: {
+              sheetId: await this.getSheetId('expenses'),
+              dimension: 'ROWS',
+              startIndex: rowIndex + 1,
+              endIndex: rowIndex + 2
+            }
+          }
+        }]
+      }
+    })
+  }
+
+  // INCOMES
+  static async listIncomes(workspaceId: string): Promise<IncomeRecord[]> {
+    await this.ensureSheetExists('incomes', ['id','workspace_id','description','amount','date','project_id','notes','created_at','updated_at'])
+    const { sheets, spreadsheetId } = await this.getSheet()
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: 'incomes!A2:I10000'
+    })
+    const rows = res.data.values || []
+    return rows
+      .filter(r => r[1] === workspaceId)
+      .map(r => ({
+        id: r[0],
+        workspace_id: r[1],
+        description: r[2],
+        amount: parseFloat(r[3] || '0'),
+        date: r[4],
+        project_id: r[5],
+        notes: r[6],
+        created_at: r[7],
+        updated_at: r[8]
+      }))
+  }
+
+  static async createIncome(data: Omit<IncomeRecord, 'id' | 'created_at' | 'updated_at'>): Promise<IncomeRecord> {
+    await this.ensureSheetExists('incomes', ['id','workspace_id','description','amount','date','project_id','notes','created_at','updated_at'])
+    const { sheets, spreadsheetId } = await this.getSheet()
+    const id = `inc-${Date.now()}`
+    const now = new Date().toISOString()
+    const row = [
+      id,
+      data.workspace_id,
+      data.description,
+      data.amount,
+      data.date,
+      data.project_id || '',
+      data.notes || '',
+      now,
+      now
+    ]
+    await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: 'incomes!A:I',
+      valueInputOption: 'RAW',
+      requestBody: { values: [row] }
+    })
+    return { id, ...data, created_at: now, updated_at: now }
+  }
+
+  static async updateIncome(id: string, data: Partial<Omit<IncomeRecord, 'id' | 'created_at' | 'workspace_id'>>): Promise<IncomeRecord> {
+    await this.ensureSheetExists('incomes', ['id','workspace_id','description','amount','date','project_id','notes','created_at','updated_at'])
+    const { sheets, spreadsheetId } = await this.getSheet()
+    
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: 'incomes!A2:I10000'
+    })
+    const rows = res.data.values || []
+    const rowIndex = rows.findIndex(r => r[0] === id)
+    
+    if (rowIndex === -1) {
+      throw new Error('Income not found')
+    }
+    
+    const existingRow = rows[rowIndex]
+    const existingRecord: IncomeRecord = {
+      id: existingRow[0],
+      workspace_id: existingRow[1],
+      description: existingRow[2],
+      amount: parseFloat(existingRow[3] || '0'),
+      date: existingRow[4],
+      project_id: existingRow[5],
+      notes: existingRow[6],
+      created_at: existingRow[7],
+      updated_at: existingRow[8]
+    }
+    
+    const updatedData = { ...existingRecord, ...data }
+    const now = new Date().toISOString()
+    const updatedRow = [
+      existingRecord.id,
+      existingRecord.workspace_id,
+      updatedData.description,
+      updatedData.amount,
+      updatedData.date,
+      updatedData.project_id || '',
+      updatedData.notes || '',
+      existingRecord.created_at,
+      now
+    ]
+    
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `incomes!A${rowIndex + 2}:I${rowIndex + 2}`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [updatedRow] }
+    })
+    
+    return { ...updatedData, updated_at: now }
+  }
+
+  static async deleteIncome(id: string): Promise<void> {
+    await this.ensureSheetExists('incomes', ['id','workspace_id','description','amount','date','project_id','notes','created_at','updated_at'])
+    const { sheets, spreadsheetId } = await this.getSheet()
+    
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: 'incomes!A2:I10000'
+    })
+    const rows = res.data.values || []
+    const rowIndex = rows.findIndex(r => r[0] === id)
+    
+    if (rowIndex === -1) {
+      throw new Error('Income not found')
+    }
+    
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [{
+          deleteDimension: {
+            range: {
+              sheetId: await this.getSheetId('incomes'),
+              dimension: 'ROWS',
+              startIndex: rowIndex + 1,
+              endIndex: rowIndex + 2
+            }
+          }
+        }]
+      }
+    })
+  }
+
+  // Update and delete salaries
+  static async updateSalary(id: string, data: Partial<Omit<SalaryRecord, 'id' | 'created_at' | 'workspace_id'>>): Promise<SalaryRecord> {
+    await this.ensureSheetExists('salaries', ['id','workspace_id','user_id','monthly_salary','effective_month','notes','created_at','updated_at'])
+    const { sheets, spreadsheetId } = await this.getSheet()
+    
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: 'salaries!A2:H10000'
+    })
+    const rows = res.data.values || []
+    const rowIndex = rows.findIndex(r => r[0] === id)
+    
+    if (rowIndex === -1) {
+      throw new Error('Salary not found')
+    }
+    
+    const existingRow = rows[rowIndex]
+    const existingRecord: SalaryRecord = {
+      id: existingRow[0],
+      workspace_id: existingRow[1],
+      user_id: existingRow[2],
+      monthly_salary: parseFloat(existingRow[3] || '0'),
+      effective_month: existingRow[4],
+      notes: existingRow[5],
+      created_at: existingRow[6],
+      updated_at: existingRow[7]
+    }
+    
+    const updatedData = { ...existingRecord, ...data }
+    const now = new Date().toISOString()
+    const updatedRow = [
+      existingRecord.id,
+      existingRecord.workspace_id,
+      updatedData.user_id,
+      updatedData.monthly_salary,
+      updatedData.effective_month,
+      updatedData.notes || '',
+      existingRecord.created_at,
+      now
+    ]
+    
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `salaries!A${rowIndex + 2}:H${rowIndex + 2}`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [updatedRow] }
+    })
+    
+    return { ...updatedData, updated_at: now }
+  }
+
+  static async deleteSalary(id: string): Promise<void> {
+    await this.ensureSheetExists('salaries', ['id','workspace_id','user_id','monthly_salary','effective_month','notes','created_at','updated_at'])
+    const { sheets, spreadsheetId } = await this.getSheet()
+    
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: 'salaries!A2:H10000'
+    })
+    const rows = res.data.values || []
+    const rowIndex = rows.findIndex(r => r[0] === id)
+    
+    if (rowIndex === -1) {
+      throw new Error('Salary not found')
+    }
+    
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [{
+          deleteDimension: {
+            range: {
+              sheetId: await this.getSheetId('salaries'),
+              dimension: 'ROWS',
+              startIndex: rowIndex + 1,
+              endIndex: rowIndex + 2
+            }
+          }
+        }]
+      }
+    })
   }
 }
 

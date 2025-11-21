@@ -280,4 +280,50 @@ export class ProjectsService {
       throw error
     }
   }
+
+  static async deleteProject(projectId: string): Promise<void> {
+    try {
+      const { sheets, spreadsheetId } = await this.getSheet()
+      
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: 'projects!A2:W1000',
+      })
+
+      const rows = response.data.values || []
+      const projectIndex = rows.findIndex(row => row[0] === projectId)
+      
+      if (projectIndex === -1) {
+        throw new Error('Project not found')
+      }
+
+      // Get sheet ID
+      const metadata = await sheets.spreadsheets.get({ spreadsheetId })
+      const sheet = metadata.data.sheets?.find(s => s.properties?.title === 'projects')
+      if (!sheet?.properties?.sheetId) {
+        throw new Error('Projects sheet not found')
+      }
+
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          requests: [{
+            deleteDimension: {
+              range: {
+                sheetId: sheet.properties.sheetId,
+                dimension: 'ROWS',
+                startIndex: projectIndex + 1, // +1 because we start from row 2
+                endIndex: projectIndex + 2
+              }
+            }
+          }]
+        }
+      })
+
+      console.log('✅ Project deleted from Google Sheets:', projectId)
+    } catch (error) {
+      console.error('Error deleting project:', error)
+      throw error
+    }
+  }
 }
