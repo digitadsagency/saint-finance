@@ -480,8 +480,9 @@ export async function GET(request: NextRequest) {
     const ingresos = ingresosReales + ingresosVariables
     
     // Calcular gastos del mes
+    // Los gastos fijos son mensuales recurrentes, se muestran siempre (no se filtran por fecha)
     const gastosFijos = (expenses || [])
-      .filter((e: any) => e.expense_type === 'fixed' && !e.is_installment && (e.date || '').startsWith(monthPrefix))
+      .filter((e: any) => e.expense_type === 'fixed' && !e.is_installment)
       .reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0)
     
     const gastosVariables = (expenses || [])

@@ -23,14 +23,14 @@ export function TeamEfficiencyWidget({ realMetrics }: TeamEfficiencyWidgetProps)
     
     // Fallback to mock data only if no real metrics provided
     return {
-      tasksCompleted: Math.floor(Math.random() * 5) + 8,    // 8-12 tareas completadas
-      tasksRemaining: Math.floor(Math.random() * 8) + 12,   // 12-20 tareas restantes
-      completedThisWeek: Math.floor(Math.random() * 3) + 5, // 5-7 completadas esta semana
-      overdueTasks: Math.floor(Math.random() * 3) + 1,      // 1-3 tareas vencidas
-      activeMembers: Math.floor(Math.random() * 2) + 6      // 6-8 miembros activos
+        tasksCompleted: Math.floor(Math.random() * 5) + 8,    // 8-12 tareas completadas
+        tasksRemaining: Math.floor(Math.random() * 8) + 12,   // 12-20 tareas restantes
+        completedThisWeek: Math.floor(Math.random() * 3) + 5, // 5-7 completadas esta semana
+        overdueTasks: Math.floor(Math.random() * 3) + 1,      // 1-3 tareas vencidas
+        activeMembers: Math.floor(Math.random() * 2) + 6      // 6-8 miembros activos
     }
   }, [realMetrics])
-
+      
   useEffect(() => {
     // Only animate on mount if using real data
     if (realMetrics) {

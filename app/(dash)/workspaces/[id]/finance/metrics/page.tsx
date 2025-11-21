@@ -21,6 +21,8 @@ export default function FinanceMetricsPage({ params }: { params: { id: string } 
   const [month, setMonth] = useState<string>(getDefaultMonth())
   const [metrics, setMetrics] = useState<any | null>(null)
   const [loadingMetrics, setLoadingMetrics] = useState(false)
+  const [monthlyUtilidad, setMonthlyUtilidad] = useState<any[]>([])
+  const [loadingMonthly, setLoadingMonthly] = useState(false)
   const isAdmin = useMemo(() => {
     const name = (user?.name || '').toLowerCase()
     return name === 'miguel' || name === 'raul'
@@ -57,6 +59,27 @@ export default function FinanceMetricsPage({ params }: { params: { id: string } 
   }, [params.id])
 
   useEffect(() => { if (isAdmin) fetchMetrics(month) }, [isAdmin, month, fetchMetrics])
+
+  const fetchMonthlyUtilidad = useCallback(async () => {
+    setLoadingMonthly(true)
+    try {
+      const now = new Date()
+      const currentYear = now.getFullYear()
+      const startMonth = `${currentYear}-01`
+      const endMonth = `${currentYear}-12`
+      
+      const res = await fetch(`/api/metrics/monthly-utilidad?workspaceId=${params.id}&startMonth=${startMonth}&endMonth=${endMonth}`, { cache: 'no-store' })
+      if (!res.ok) throw new Error('Error al cargar utilidad mensual')
+      const data = await res.json()
+      setMonthlyUtilidad(data.monthlyData || [])
+    } catch (e) {
+      console.error('Error fetching monthly utility:', e)
+    } finally {
+      setLoadingMonthly(false)
+    }
+  }, [params.id])
+
+  useEffect(() => { if (isAdmin) fetchMonthlyUtilidad() }, [isAdmin, fetchMonthlyUtilidad])
 
   if (!user || !isAdmin) return null
 
@@ -185,6 +208,72 @@ export default function FinanceMetricsPage({ params }: { params: { id: string } 
             </div>
           ) : (
             <div className="text-sm text-gray-500">Sin datos disponibles</div>
+          )}
+        </section>
+
+        {/* Utilidad Mensual por Mes */}
+        <section className="bg-white rounded-lg shadow-sm border p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Utilidad Mensual (Año {new Date().getFullYear()})</h2>
+          {loadingMonthly ? (
+            <div className="text-sm text-gray-500">Cargando datos mensuales...</div>
+          ) : monthlyUtilidad.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-600 border-b">
+                    <th className="py-3 pr-4 font-semibold">Mes</th>
+                    <th className="py-3 pr-4 font-semibold text-right">Ingresos Esperados</th>
+                    <th className="py-3 pr-4 font-semibold text-right">Pagos Recibidos</th>
+                    <th className="py-3 pr-4 font-semibold text-right">Ingresos Variables</th>
+                    <th className="py-3 pr-4 font-semibold text-right">Ingresos Totales</th>
+                    <th className="py-3 pr-4 font-semibold text-right">Costos Totales</th>
+                    <th className="py-3 pr-4 font-semibold text-right">Utilidad</th>
+                    <th className="py-3 pr-4 font-semibold text-right">% Utilidad</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthlyUtilidad.map((m: any) => (
+                    <tr key={m.month} className="border-b hover:bg-gray-50">
+                      <td className="py-3 pr-4 font-medium">{m.monthName} {m.year}</td>
+                      <td className="py-3 pr-4 text-right">{formatMXN(m.ingresosEsperados)}</td>
+                      <td className={`py-3 pr-4 text-right ${m.ingresosReales < m.ingresosEsperados ? 'text-orange-600 font-medium' : 'text-gray-900'}`}>
+                        {formatMXN(m.ingresosReales)}
+                        {m.ingresosEsperados > 0 && (
+                          <span className="text-xs text-gray-500 block">
+                            ({((m.ingresosReales / m.ingresosEsperados) * 100).toFixed(1)}%)
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 pr-4 text-right">{formatMXN(m.ingresosVariables)}</td>
+                      <td className="py-3 pr-4 text-right font-medium">{formatMXN(m.ingresosTotales)}</td>
+                      <td className="py-3 pr-4 text-right">{formatMXN(m.costoTotal)}</td>
+                      <td className={`py-3 pr-4 text-right font-bold ${m.utilidad >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                        {formatMXN(m.utilidad)}
+                      </td>
+                      <td className={`py-3 pr-4 text-right ${m.utilidadPct !== null ? (m.utilidadPct >= 0 ? 'text-green-700' : 'text-red-700') : 'text-gray-500'}`}>
+                        {m.utilidadPct !== null ? `${m.utilidadPct.toFixed(1)}%` : 'N/A'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-gray-300 font-bold">
+                    <td className="py-3 pr-4">Total</td>
+                    <td className="py-3 pr-4 text-right">{formatMXN(monthlyUtilidad.reduce((sum: number, m: any) => sum + m.ingresosEsperados, 0))}</td>
+                    <td className="py-3 pr-4 text-right">{formatMXN(monthlyUtilidad.reduce((sum: number, m: any) => sum + m.ingresosReales, 0))}</td>
+                    <td className="py-3 pr-4 text-right">{formatMXN(monthlyUtilidad.reduce((sum: number, m: any) => sum + m.ingresosVariables, 0))}</td>
+                    <td className="py-3 pr-4 text-right">{formatMXN(monthlyUtilidad.reduce((sum: number, m: any) => sum + m.ingresosTotales, 0))}</td>
+                    <td className="py-3 pr-4 text-right">{formatMXN(monthlyUtilidad.reduce((sum: number, m: any) => sum + m.costoTotal, 0))}</td>
+                    <td className={`py-3 pr-4 text-right ${monthlyUtilidad.reduce((sum: number, m: any) => sum + m.utilidad, 0) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                      {formatMXN(monthlyUtilidad.reduce((sum: number, m: any) => sum + m.utilidad, 0))}
+                    </td>
+                    <td className="py-3 pr-4 text-right text-gray-500">-</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          ) : (
+            <div className="text-sm text-gray-500">No hay datos mensuales disponibles</div>
           )}
         </section>
 
