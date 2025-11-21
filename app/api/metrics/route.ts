@@ -869,6 +869,12 @@ export async function GET(request: NextRequest) {
     res.headers.set('Cache-Control', 'public, max-age=60, s-maxage=60, stale-while-revalidate=60')
     return res
   } catch (e: any) {
+    // Log the full error for debugging
+    console.error('[Metrics] Error computing metrics:', e)
+    console.error('[Metrics] Error stack:', e?.stack)
+    console.error('[Metrics] Error message:', e?.message)
+    console.error('[Metrics] Error name:', e?.name)
+    
     // Fallback: return empty metrics to avoid UI crash while infra is configured
     const now = new Date()
     const defaultMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`
@@ -908,6 +914,8 @@ export async function GET(request: NextRequest) {
       },
       error: 'Failed to compute metrics',
       details: e?.message || 'Unknown error',
+      errorStack: e?.stack || 'No stack trace',
+      errorName: e?.name || 'Unknown error type'
     } as any
     const res = NextResponse.json(empty, { status: 200 })
     res.headers.set('Cache-Control', 'public, max-age=30, s-maxage=30, stale-while-revalidate=60')
