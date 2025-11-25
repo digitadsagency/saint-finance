@@ -37,8 +37,11 @@ export async function GET(request: NextRequest) {
       .filter((e: any) => e.expense_type === 'fixed' && !e.is_installment)
       .reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0)
     
-    // Ingresos esperados mensuales (facturación mensual)
+    // Ingresos esperados mensuales (facturación mensual de clientes ACTIVOS solamente)
     const ingresosEsperadosMensuales = (billings || []).reduce((sum: number, b: any) => {
+      // Filtrar solo clientes activos
+      const project = projects.find((p: any) => p.id === b.project_id)
+      if (project?.status !== 'active') return sum
       return sum + (Number(b.monthly_amount) || 0)
     }, 0)
     

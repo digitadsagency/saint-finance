@@ -489,11 +489,12 @@ export class FinanceService {
       now, 
       now
     ]
-    // Usar append sin rango específico para que Google Sheets lo agregue automáticamente
+    // Usar append con INSERT_ROWS para asegurar que se inserte correctamente desde la columna A
     await sheets.spreadsheets.values.append({
       spreadsheetId,
       range: 'expenses!A:L',
       valueInputOption: 'RAW',
+      insertDataOption: 'INSERT_ROWS',
       requestBody: { values: [row] }
     })
     return { 

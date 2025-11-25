@@ -206,6 +206,9 @@ export async function GET(request: NextRequest) {
     const revenueProject = new Map<string, number>()
     for (const b of billings) {
       if (b.project_id) {
+        // Solo incluir clientes activos en los ingresos esperados
+        const project = projects.find((p: any) => p.id === b.project_id)
+        if (project?.status !== 'active') continue
         const pid = b.project_id
         revenueProject.set(pid, (revenueProject.get(pid) || 0) + Number(b.monthly_amount || 0))
       }

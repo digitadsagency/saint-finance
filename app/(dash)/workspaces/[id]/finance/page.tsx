@@ -95,8 +95,12 @@ export default function FinancePage({ params }: { params: { id: string } }) {
     const safeExpenses = Array.isArray(expenses) ? expenses : []
     const safeSalaries = Array.isArray(salaries) ? salaries : []
     
-    // Ingresos esperados (facturación mensual)
-    const ingresosEsperados = safeBillings.reduce((sum: number, b: any) => sum + (Number(b.monthly_amount) || 0), 0)
+    // Ingresos esperados (facturación mensual de clientes ACTIVOS solamente)
+    const ingresosEsperados = safeBillings.reduce((sum: number, b: any) => {
+      const project = projects.find((p: any) => p.id === b.project_id)
+      if (project?.status !== 'active') return sum
+      return sum + (Number(b.monthly_amount) || 0)
+    }, 0)
     
     // Ingresos reales (pagos recibidos en el mes)
     const ingresosReales = safeBillings.reduce((sum: number, b: any) => {

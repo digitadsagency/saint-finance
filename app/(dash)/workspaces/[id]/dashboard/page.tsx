@@ -388,7 +388,10 @@ function PaymentReminders({ billings, clients, workspaceId, router }: { billings
       const paymentsOnDay = billings
         .filter(b => {
           const paymentDay = Number(b.payment_day || b.paymentDay || 0)
-          return paymentDay === checkDay
+          if (paymentDay !== checkDay) return false
+          // Solo incluir clientes activos
+          const project = clients.find(p => p.id === (b.project_id || b.projectId))
+          return project?.status === 'active'
         })
         .map(b => {
           const project = clients.find(p => p.id === (b.project_id || b.projectId))

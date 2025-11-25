@@ -159,13 +159,25 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
   }, [allPaymentRecords, projects])
 
   // Calcular totales del mes - DEBE ESTAR ANTES DE CUALQUIER RETURN CONDICIONAL
+  // Solo incluir clientes activos
   const totalMonthPayments = useMemo(() => {
-    return billings.reduce((sum, b) => sum + Number(b.monthly_amount || b.monthlyAmountMXN || 0), 0)
-  }, [billings])
+    return billings.reduce((sum, b) => {
+      const project = projects.find(p => p.id === (b.project_id || b.projectId))
+      if (project?.status !== 'active') return sum
+      return sum + Number(b.monthly_amount || b.monthlyAmountMXN || 0)
+    }, 0)
+  }, [billings, projects])
 
   const uniqueClients = useMemo(() => {
-    return new Set(billings.map(b => b.project_id || b.projectId)).size
-  }, [billings])
+    // Solo contar clientes activos
+    return new Set(billings
+      .filter(b => {
+        const project = projects.find(p => p.id === (b.project_id || b.projectId))
+        return project?.status === 'active'
+      })
+      .map(b => b.project_id || b.projectId)
+    ).size
+  }, [billings, projects])
 
   // Ahora sí, los returns condicionales DESPUÉS de todos los hooks
   if (authLoading || loading) {
@@ -178,11 +190,14 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
 
   if (!user || !isAdmin) return null
 
-  // Obtener pagos esperados por día del mes
+  // Obtener pagos esperados por día del mes (solo clientes ACTIVOS)
   const getExpectedPaymentsForDay = (day: number) => {
     return billings.filter(b => {
       const paymentDay = Number(b.payment_day || b.paymentDay || 0)
-      return paymentDay === day
+      if (paymentDay !== day) return false
+      // Solo incluir clientes activos
+      const project = projects.find(p => p.id === (b.project_id || b.projectId))
+      return project?.status === 'active'
     }).map(b => {
       const project = projects.find(p => p.id === (b.project_id || b.projectId))
       return {
