@@ -544,13 +544,32 @@ export class FinanceService {
       now
     ]
     
-    // Usar append con INSERT_ROWS para agregar una nueva fila sin sobreescribir
-    // Esto asegura que siempre se agregue al final, sin importar filas vacías
-    await sheets.spreadsheets.values.append({
+    // Obtener la última fila con datos válidos en la columna A específicamente
+    // Esto asegura que encontremos la última fila real, incluso si hay datos desfasados
+    const lastRowData = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: 'expenses!A:L',
+      range: 'expenses!A:A'
+    })
+    
+    const aColumnValues = lastRowData.data.values || []
+    let lastRow = 1 // Empezar desde la fila 1 (header)
+    
+    // Buscar la última fila que tenga un valor en la columna A (empezando desde abajo)
+    for (let i = aColumnValues.length - 1; i >= 0; i--) {
+      if (aColumnValues[i] && aColumnValues[i][0] && aColumnValues[i][0].trim() !== '') {
+        lastRow = i + 1 // +1 porque el array es 0-indexed pero las filas empiezan en 1
+        break
+      }
+    }
+    
+    // La siguiente fila será lastRow + 1
+    const nextRow = lastRow + 1
+    
+    // Insertar directamente en la fila calculada, asegurando que empiece en la columna A
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `expenses!A${nextRow}:L${nextRow}`,
       valueInputOption: 'RAW',
-      insertDataOption: 'INSERT_ROWS',
       requestBody: { values: [row] }
     })
     return { 
