@@ -183,6 +183,60 @@ export class FinanceService {
     return { id, ...data, created_at: now, updated_at: now }
   }
 
+  static async updateClientBilling(id: string, data: Partial<Omit<ClientBillingRecord, 'id' | 'created_at' | 'workspace_id'>>): Promise<ClientBillingRecord> {
+    await this.ensureSheetExists('client_billing', ['id','workspace_id','project_id','monthly_amount','payment_day','created_at','updated_at'])
+    const { sheets, spreadsheetId } = await this.getSheet()
+    
+    // Get existing record
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: 'client_billing!A2:H10000'
+    })
+    const rows = res.data.values || []
+    const rowIndex = rows.findIndex(r => r[0] === id)
+    
+    if (rowIndex === -1) {
+      throw new Error('Client billing not found')
+    }
+    
+    const existingRow = rows[rowIndex]
+    const existingRecord: ClientBillingRecord = {
+      id: existingRow[0],
+      workspace_id: existingRow[1],
+      project_id: existingRow[2],
+      monthly_amount: parseFloat(existingRow[3] || '0'),
+      payment_day: parseInt(existingRow[4] || '1'),
+      created_at: existingRow[5],
+      updated_at: existingRow[6]
+    }
+    
+    const updatedData: ClientBillingRecord = {
+      ...existingRecord,
+      monthly_amount: data.monthly_amount !== undefined ? data.monthly_amount : existingRecord.monthly_amount,
+      payment_day: data.payment_day !== undefined ? data.payment_day : existingRecord.payment_day,
+      updated_at: new Date().toISOString()
+    }
+    
+    const updatedRow = [
+      updatedData.id,
+      updatedData.workspace_id,
+      updatedData.project_id,
+      updatedData.monthly_amount,
+      updatedData.payment_day,
+      updatedData.created_at,
+      updatedData.updated_at
+    ]
+    
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `client_billing!A${rowIndex + 2}:G${rowIndex + 2}`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [updatedRow] }
+    })
+    
+    return updatedData
+  }
+
   // PAYMENT RECORDS (actual payments received)
   static async listPaymentRecords(workspaceId: string, month?: string): Promise<PaymentRecord[]> {
     await this.ensureSheetExists('payment_records', ['id','workspace_id','project_id','billing_id','expected_amount','paid_amount','expected_date','paid_date','is_on_time','days_delay','notes','created_at','updated_at'])
@@ -490,33 +544,13 @@ export class FinanceService {
       now
     ]
     
-    // Obtener todas las filas para encontrar la última fila con datos válidos
-    const existingData = await sheets.spreadsheets.values.get({
+    // Usar append con INSERT_ROWS para agregar una nueva fila sin sobreescribir
+    // Esto asegura que siempre se agregue al final, sin importar filas vacías
+    await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: 'expenses!A2:L10000'
-    })
-    const rows = existingData.data.values || []
-    
-    // Encontrar la última fila que tenga al menos el ID (columna A) y workspace_id (columna B)
-    let lastRow = 1 // Empezar desde la fila 1 (después del header)
-    for (let i = rows.length - 1; i >= 0; i--) {
-      if (rows[i] && rows[i][0] && rows[i][1]) {
-        // Esta fila tiene datos válidos, la siguiente será lastRow + 1
-        lastRow = i + 2 // +2 porque empezamos desde A2 (fila 2) y necesitamos la siguiente
-        break
-      }
-    }
-    
-    // Si no hay datos, empezar desde la fila 2 (después del header)
-    if (rows.length === 0) {
-      lastRow = 2
-    }
-    
-    // Insertar directamente en la fila calculada, asegurando que empiece en columna A
-    await sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `expenses!A${lastRow}:L${lastRow}`,
+      range: 'expenses!A:L',
       valueInputOption: 'RAW',
+      insertDataOption: 'INSERT_ROWS',
       requestBody: { values: [row] }
     })
     return { 

@@ -56,6 +56,7 @@ export default function FinancePage({ params }: { params: { id: string } }) {
   const [editingSalary, setEditingSalary] = useState<any | null>(null)
   const [editingExpense, setEditingExpense] = useState<any | null>(null)
   const [editingIncome, setEditingIncome] = useState<any | null>(null)
+  const [editingBilling, setEditingBilling] = useState<any | null>(null)
   
   // Filtro de fechas para gastos - con selects de año y mes
   const now = new Date()
@@ -263,10 +264,12 @@ export default function FinancePage({ params }: { params: { id: string } }) {
   }
 
   const submitBilling = async () => {
+    const isEditing = !!editingBilling
     const res = await fetch('/api/finance/client-billing', {
-      method: 'POST',
+      method: isEditing ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        id: editingBilling?.id,
         current_user: currentUserName,
         workspace_id: params.id,
         project_id: billingForm.project_id,
@@ -276,12 +279,32 @@ export default function FinancePage({ params }: { params: { id: string } }) {
     })
     if (res.ok) {
       const rec = await res.json()
-      setBillings(prev => [rec, ...prev])
+      if (isEditing) {
+        setBillings(prev => prev.map(b => b.id === editingBilling.id ? rec : b))
+        setEditingBilling(null)
+      } else {
+        setBillings(prev => [rec, ...prev])
+      }
       setBillingForm({ project_id: '', monthly_amount: '', payment_day: '1' })
+      // Reload
+      const billRes = await fetch(`/api/finance/client-billing?workspaceId=${params.id}`)
+      if (billRes.ok) {
+        const billData = await billRes.json()
+        setBillings(Array.isArray(billData) ? billData : [])
+      }
     } else {
       const err = await res.json().catch(()=>({ error: 'Error desconocido' }))
-      alert(`Error al guardar facturación: ${err.error || res.statusText}`)
+      alert(`Error al ${isEditing ? 'actualizar' : 'guardar'} facturación: ${err.error || res.statusText}`)
     }
+  }
+
+  const handleEditBilling = (billing: any) => {
+    setEditingBilling(billing)
+    setBillingForm({
+      project_id: billing.project_id,
+      monthly_amount: billing.monthly_amount.toString(),
+      payment_day: billing.payment_day.toString()
+    })
   }
 
   const submitWorklog = async () => {
@@ -740,7 +763,14 @@ export default function FinancePage({ params }: { params: { id: string } }) {
               <Input value={billingForm.payment_day} onChange={e => setBillingForm(s => ({ ...s, payment_day: e.target.value }))} type="number" min="1" max="31" />
             </div>
             <div>
-              <Button onClick={submitBilling} disabled={!billingForm.project_id || !billingForm.monthly_amount}>Guardar</Button>
+              <Button onClick={submitBilling} disabled={!billingForm.project_id || !billingForm.monthly_amount}>
+                {editingBilling ? 'Actualizar' : 'Guardar'}
+              </Button>
+              {editingBilling && (
+                <Button variant="outline" className="ml-2" onClick={() => { setEditingBilling(null); setBillingForm({ project_id: '', monthly_amount: '', payment_day: '1' }) }}>
+                  Cancelar
+                </Button>
+              )}
             </div>
           </div>
 
@@ -754,7 +784,7 @@ export default function FinancePage({ params }: { params: { id: string } }) {
               .map((b) => {
                 const project = projects.find((p:any)=>p.id===b.project_id)
                 return (
-                  <div key={b.id} className="py-2 text-sm flex justify-between items-center">
+                  <div key={b.id} className="py-2 text-sm flex justify-between items-center group">
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{project?.name || 'Proyecto'}</span>
                       <Badge 
@@ -770,7 +800,12 @@ export default function FinancePage({ params }: { params: { id: string } }) {
                       </Badge>
                       <span className="text-gray-500"> · Paga día {b.payment_day}</span>
                     </div>
-                    <div className="font-semibold">${b.monthly_amount}</div>
+                    <div className="flex items-center gap-2">
+                      <div className="font-semibold">${b.monthly_amount}</div>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => handleEditBilling(b)}>
+                        <Edit className="h-3 w-3" />
+                      </Button>
+                    </div>
                   </div>
                 )
               })}

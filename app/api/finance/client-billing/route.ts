@@ -40,4 +40,25 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export async function PUT(request: NextRequest) {
+  try {
+    const body = await request.json()
+    if (!isAdminUser(body.current_user)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    if (!body.id) {
+      return NextResponse.json({ error: 'ID is required' }, { status: 400 })
+    }
+
+    const record = await FinanceService.updateClientBilling(body.id, {
+      monthly_amount: body.monthly_amount !== undefined ? Number(body.monthly_amount) : undefined,
+      payment_day: body.payment_day !== undefined ? Number(body.payment_day) : undefined
+    })
+    return NextResponse.json(record)
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message || 'Failed to update client billing' }, { status: 500 })
+  }
+}
+
 

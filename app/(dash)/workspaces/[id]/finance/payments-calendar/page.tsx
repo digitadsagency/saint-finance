@@ -179,6 +179,50 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
     ).size
   }, [billings, projects])
 
+  // Tabla de resumen de pagos del mes (solo clientes activos)
+  const monthlyPaymentSummary = useMemo(() => {
+    if (!selectedDate) return []
+    const monthStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}`
+    const summary = billings
+      .filter(b => {
+        const project = projects.find(p => p.id === (b.project_id || b.projectId))
+        return project?.status === 'active'
+      })
+      .map(b => {
+        const project = projects.find(p => p.id === (b.project_id || b.projectId))
+        const expectedAmount = Number(b.monthly_amount || b.monthlyAmountMXN || 0)
+        const paymentDay = Number(b.payment_day || b.paymentDay || 0)
+        const expectedDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), paymentDay)
+        const expectedDateStr = toLocalYMD(expectedDate)
+        
+        // Buscar si hay un pago registrado para este billing en este mes
+        const payment = paymentRecords.find(pr => 
+          pr.billing_id === b.id && 
+          pr.paid_date === expectedDateStr
+        )
+        
+        const paidAmount = payment ? Number(payment.paid_amount || 0) : 0
+        const isPaid = paidAmount > 0
+        const isComplete = isPaid && paidAmount >= expectedAmount
+        const isOnTime = payment ? payment.is_on_time : false
+        
+        return {
+          clientName: project?.name || 'Cliente',
+          expectedDate: expectedDateStr,
+          expectedAmount,
+          paidAmount,
+          isPaid,
+          isComplete,
+          isOnTime,
+          daysDelay: payment?.days_delay || 0,
+          paymentId: payment?.id
+        }
+      })
+      .sort((a, b) => new Date(a.expectedDate).getTime() - new Date(b.expectedDate).getTime())
+    
+    return summary
+  }, [billings, projects, paymentRecords, selectedDate])
+
   // Ahora sí, los returns condicionales DESPUÉS de todos los hooks
   if (authLoading || loading) {
     return (
@@ -208,6 +252,7 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
       }
     })
   }
+
 
   // Obtener pagos realizados por día del mes
   const getPaidPaymentsForDay = (date: Date) => {
@@ -668,6 +713,65 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
                 Total acumulado: {paymentStats.totalDaysDelay} días
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Tabla de resumen de pagos del mes */}
+        <div className="bg-white rounded-lg shadow-sm border p-6 mt-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Resumen de Pagos del Mes</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left py-2 px-3 font-semibold text-gray-700">Cliente</th>
+                  <th className="text-left py-2 px-3 font-semibold text-gray-700">Fecha Esperada</th>
+                  <th className="text-right py-2 px-3 font-semibold text-gray-700">Monto Esperado</th>
+                  <th className="text-right py-2 px-3 font-semibold text-gray-700">Monto Pagado</th>
+                  <th className="text-center py-2 px-3 font-semibold text-gray-700">Estado</th>
+                  <th className="text-center py-2 px-3 font-semibold text-gray-700">Completo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {monthlyPaymentSummary.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="text-center py-4 text-gray-500">
+                      No hay clientes activos con pagos programados este mes
+                    </td>
+                  </tr>
+                ) : (
+                  monthlyPaymentSummary.map((item, idx) => (
+                    <tr key={idx} className="border-b hover:bg-gray-50">
+                      <td className="py-2 px-3 font-medium">{item.clientName}</td>
+                      <td className="py-2 px-3 text-gray-600">
+                        {new Date(item.expectedDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                      </td>
+                      <td className="py-2 px-3 text-right font-semibold">{formatMXN(item.expectedAmount)}</td>
+                      <td className={`py-2 px-3 text-right ${item.isPaid ? 'font-semibold text-green-600' : 'text-gray-400'}`}>
+                        {item.isPaid ? formatMXN(item.paidAmount) : '-'}
+                      </td>
+                      <td className="py-2 px-3 text-center">
+                        {item.isPaid ? (
+                          <Badge className={item.isOnTime ? 'bg-green-100 text-green-700 border-green-300' : 'bg-red-100 text-red-700 border-red-300'}>
+                            {item.isOnTime ? 'A tiempo' : `${item.daysDelay} días retraso`}
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-gray-100 text-gray-600 border-gray-300">Pendiente</Badge>
+                        )}
+                      </td>
+                      <td className="py-2 px-3 text-center">
+                        {item.isPaid ? (
+                          <Badge className={item.isComplete ? 'bg-green-100 text-green-700 border-green-300' : 'bg-yellow-100 text-yellow-700 border-yellow-300'}>
+                            {item.isComplete ? 'Completo' : 'Parcial'}
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-gray-100 text-gray-600 border-gray-300">-</Badge>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       </main>
