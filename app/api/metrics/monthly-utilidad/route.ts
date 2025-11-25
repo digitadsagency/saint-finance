@@ -62,8 +62,11 @@ export async function GET(request: NextRequest) {
         // Ingresos reales (pagos recibidos en este mes)
         const ingresosReales = (payments || [])
           .filter((p: any) => {
-            if (!p.payment_date) return false
-            const paymentDate = new Date(p.payment_date)
+            // Usar paid_date (fecha en que se recibió el pago)
+            const paymentDateStr = p.paid_date || p.payment_date
+            if (!paymentDateStr) return false
+            const paymentDate = new Date(paymentDateStr)
+            if (isNaN(paymentDate.getTime())) return false
             return paymentDate.getFullYear() === year && paymentDate.getMonth() + 1 === month
           })
           .reduce((sum: number, p: any) => sum + (Number(p.paid_amount) || 0), 0)

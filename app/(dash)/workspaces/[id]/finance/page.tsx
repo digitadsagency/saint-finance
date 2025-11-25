@@ -57,19 +57,31 @@ export default function FinancePage({ params }: { params: { id: string } }) {
   const [editingExpense, setEditingExpense] = useState<any | null>(null)
   const [editingIncome, setEditingIncome] = useState<any | null>(null)
   
-  // Filtro de fechas para gastos
+  // Filtro de fechas para gastos - con selects de año y mes
   const now = new Date()
-  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-  const [expenseFilterStartMonth, setExpenseFilterStartMonth] = useState<string>(() => {
-    // Por defecto, mostrar desde 3 meses atrás
-    const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, 1)
-    return `${threeMonthsAgo.getFullYear()}-${String(threeMonthsAgo.getMonth() + 1).padStart(2, '0')}`
+  const currentYear = now.getFullYear()
+  const currentMonthNum = now.getMonth() + 1
+  
+  const [expenseFilterStartYear, setExpenseFilterStartYear] = useState<number>(() => {
+    const threeMonthsAgo = new Date(currentYear, currentMonthNum - 4, 1)
+    return threeMonthsAgo.getFullYear()
   })
-  const [expenseFilterEndMonth, setExpenseFilterEndMonth] = useState<string>(() => {
-    // Por defecto, mostrar hasta 3 meses adelante
-    const threeMonthsAhead = new Date(now.getFullYear(), now.getMonth() + 3, 1)
-    return `${threeMonthsAhead.getFullYear()}-${String(threeMonthsAhead.getMonth() + 1).padStart(2, '0')}`
+  const [expenseFilterStartMonth, setExpenseFilterStartMonth] = useState<number>(() => {
+    const threeMonthsAgo = new Date(currentYear, currentMonthNum - 4, 1)
+    return threeMonthsAgo.getMonth() + 1
   })
+  const [expenseFilterEndYear, setExpenseFilterEndYear] = useState<number>(() => {
+    const threeMonthsAhead = new Date(currentYear, currentMonthNum + 2, 1)
+    return threeMonthsAhead.getFullYear()
+  })
+  const [expenseFilterEndMonth, setExpenseFilterEndMonth] = useState<number>(() => {
+    const threeMonthsAhead = new Date(currentYear, currentMonthNum + 2, 1)
+    return threeMonthsAhead.getMonth() + 1
+  })
+  
+  // Convertir a formato YYYY-MM para usar en el cálculo
+  const expenseFilterStartMonthStr = `${expenseFilterStartYear}-${String(expenseFilterStartMonth).padStart(2, '0')}`
+  const expenseFilterEndMonthStr = `${expenseFilterEndYear}-${String(expenseFilterEndMonth).padStart(2, '0')}`
 
   // Calculate financial summary
   const financialSummary = useMemo(() => {
@@ -429,8 +441,8 @@ export default function FinancePage({ params }: { params: { id: string } }) {
     const expensesMap = new Map<string, any[]>()
     
     // Parsear fechas del filtro
-    const [startYear, startMonth] = expenseFilterStartMonth.split('-').map(Number)
-    const [endYear, endMonth] = expenseFilterEndMonth.split('-').map(Number)
+    const [startYear, startMonth] = expenseFilterStartMonthStr.split('-').map(Number)
+    const [endYear, endMonth] = expenseFilterEndMonthStr.split('-').map(Number)
     const filterStartDate = new Date(startYear, startMonth - 1, 1)
     const filterEndDate = new Date(endYear, endMonth, 0) // Último día del mes final
     
@@ -523,10 +535,12 @@ export default function FinancePage({ params }: { params: { id: string } }) {
             if (!expensesMap.has(monthKey)) {
               expensesMap.set(monthKey, [])
             }
+            // Solo marcar como replicado si NO es el mes original
+            const isReplicated = i > startIndex
             expensesMap.get(monthKey)!.push({
               ...e,
-              is_replicated: i > startIndex,
-              original_date: i > startIndex ? e.date : undefined
+              is_replicated: isReplicated,
+              original_date: isReplicated ? e.date : undefined
             })
           }
         }
@@ -574,7 +588,7 @@ export default function FinancePage({ params }: { params: { id: string } }) {
         total: fixedTotal + variableTotal
       }
     })
-  }, [expenses, expenseFilterStartMonth, expenseFilterEndMonth])
+  }, [expenses, expenseFilterStartMonthStr, expenseFilterEndMonthStr])
 
   // Calculate current salaries (most recent per user) and total payroll
   const currentSalaries = useMemo(() => {
@@ -855,21 +869,61 @@ export default function FinancePage({ params }: { params: { id: string } }) {
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
                 <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Desde:</label>
-                <Input
-                  type="month"
-                  value={expenseFilterStartMonth}
-                  onChange={(e) => setExpenseFilterStartMonth(e.target.value)}
-                  className="w-40"
-                />
+                <Select
+                  value={expenseFilterStartYear.toString()}
+                  onValueChange={(v) => setExpenseFilterStartYear(Number(v))}
+                >
+                  <SelectTrigger className="w-24">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 5 }, (_, i) => currentYear - 2 + i).map(year => (
+                      <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={expenseFilterStartMonth.toString()}
+                  onValueChange={(v) => setExpenseFilterStartMonth(Number(v))}
+                >
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'].map((month, idx) => (
+                      <SelectItem key={idx + 1} value={(idx + 1).toString()}>{month}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="flex items-center gap-2">
                 <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Hasta:</label>
-                <Input
-                  type="month"
-                  value={expenseFilterEndMonth}
-                  onChange={(e) => setExpenseFilterEndMonth(e.target.value)}
-                  className="w-40"
-                />
+                <Select
+                  value={expenseFilterEndYear.toString()}
+                  onValueChange={(v) => setExpenseFilterEndYear(Number(v))}
+                >
+                  <SelectTrigger className="w-24">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 5 }, (_, i) => currentYear - 2 + i).map(year => (
+                      <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={expenseFilterEndMonth.toString()}
+                  onValueChange={(v) => setExpenseFilterEndMonth(Number(v))}
+                >
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'].map((month, idx) => (
+                      <SelectItem key={idx + 1} value={(idx + 1).toString()}>{month}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </div>
@@ -980,7 +1034,7 @@ export default function FinancePage({ params }: { params: { id: string } }) {
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="font-semibold">{Number(e.amount).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}</div>
-                        {!e.is_installment_payment && !e.is_replicated && (
+                        {!e.is_installment_payment && (
                           <>
                             <Button variant="ghost" size="sm" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => handleEditExpense(e)}>
                               <Edit className="h-3 w-3" />
@@ -991,7 +1045,7 @@ export default function FinancePage({ params }: { params: { id: string } }) {
                           </>
                         )}
                         {e.is_replicated && (
-                          <span className="text-xs text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity">Edita el gasto original</span>
+                          <span className="text-xs text-gray-500 ml-2">(Editar afecta todos los meses)</span>
                         )}
                       </div>
                     </div>
