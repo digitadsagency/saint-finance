@@ -56,6 +56,20 @@ export default function FinancePage({ params }: { params: { id: string } }) {
   const [editingSalary, setEditingSalary] = useState<any | null>(null)
   const [editingExpense, setEditingExpense] = useState<any | null>(null)
   const [editingIncome, setEditingIncome] = useState<any | null>(null)
+  
+  // Filtro de fechas para gastos
+  const now = new Date()
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const [expenseFilterStartMonth, setExpenseFilterStartMonth] = useState<string>(() => {
+    // Por defecto, mostrar desde 3 meses atrás
+    const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, 1)
+    return `${threeMonthsAgo.getFullYear()}-${String(threeMonthsAgo.getMonth() + 1).padStart(2, '0')}`
+  })
+  const [expenseFilterEndMonth, setExpenseFilterEndMonth] = useState<string>(() => {
+    // Por defecto, mostrar hasta 3 meses adelante
+    const threeMonthsAhead = new Date(now.getFullYear(), now.getMonth() + 3, 1)
+    return `${threeMonthsAhead.getFullYear()}-${String(threeMonthsAhead.getMonth() + 1).padStart(2, '0')}`
+  })
 
   // Calculate financial summary
   const financialSummary = useMemo(() => {
@@ -414,6 +428,21 @@ export default function FinancePage({ params }: { params: { id: string } }) {
   const expensesByMonth = useMemo(() => {
     const expensesMap = new Map<string, any[]>()
     
+    // Parsear fechas del filtro
+    const [startYear, startMonth] = expenseFilterStartMonth.split('-').map(Number)
+    const [endYear, endMonth] = expenseFilterEndMonth.split('-').map(Number)
+    const filterStartDate = new Date(startYear, startMonth - 1, 1)
+    const filterEndDate = new Date(endYear, endMonth, 0) // Último día del mes final
+    
+    // Obtener todos los meses en el rango del filtro
+    const monthsInRange: string[] = []
+    const current = new Date(filterStartDate)
+    while (current <= filterEndDate) {
+      const monthKey = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`
+      monthsInRange.push(monthKey)
+      current.setMonth(current.getMonth() + 1)
+    }
+    
     // Agrupar gastos por mes
     expenses.forEach((e: any) => {
       if (!e.date) {
@@ -443,6 +472,7 @@ export default function FinancePage({ params }: { params: { id: string } }) {
       
       const expenseYear = expenseDate.getFullYear()
       const expenseMonth = expenseDate.getMonth()
+      const expenseDay = expenseDate.getDate()
       
       // Si es a meses sin intereses, generar pagos mensuales
       if (e.is_installment && e.installment_months && e.monthly_payment) {
@@ -450,35 +480,76 @@ export default function FinancePage({ params }: { params: { id: string } }) {
         const monthlyPayment = Number(e.monthly_payment)
         
         for (let i = 0; i < months; i++) {
-          const paymentDate = new Date(expenseYear, expenseMonth + i, expenseDate.getDate())
+          const paymentDate = new Date(expenseYear, expenseMonth + i, expenseDay)
           const monthKey = `${paymentDate.getFullYear()}-${String(paymentDate.getMonth() + 1).padStart(2, '0')}`
           
+          // Solo agregar si está en el rango del filtro
+          if (monthsInRange.includes(monthKey)) {
+            if (!expensesMap.has(monthKey)) {
+              expensesMap.set(monthKey, [])
+            }
+            
+            expensesMap.get(monthKey)!.push({
+              ...e,
+              amount: monthlyPayment,
+              payment_month: i + 1,
+              total_months: months,
+              is_installment_payment: true
+            })
+          }
+        }
+      } else if (e.expense_type === 'fixed') {
+        // GASTOS FIJOS: Replicar en todos los meses desde la fecha de inicio hasta el final del filtro
+        const startMonthKey = `${expenseYear}-${String(expenseMonth + 1).padStart(2, '0')}`
+        
+        // Encontrar el índice del mes de inicio en el rango
+        const startIndex = monthsInRange.indexOf(startMonthKey)
+        if (startIndex === -1) {
+          // Si el mes de inicio está antes del filtro, empezar desde el inicio del filtro
+          monthsInRange.forEach(monthKey => {
+            if (!expensesMap.has(monthKey)) {
+              expensesMap.set(monthKey, [])
+            }
+            expensesMap.get(monthKey)!.push({
+              ...e,
+              is_replicated: true,
+              original_date: e.date
+            })
+          })
+        } else {
+          // Replicar desde el mes de inicio hasta el final del filtro
+          for (let i = startIndex; i < monthsInRange.length; i++) {
+            const monthKey = monthsInRange[i]
+            if (!expensesMap.has(monthKey)) {
+              expensesMap.set(monthKey, [])
+            }
+            expensesMap.get(monthKey)!.push({
+              ...e,
+              is_replicated: i > startIndex,
+              original_date: i > startIndex ? e.date : undefined
+            })
+          }
+        }
+      } else {
+        // GASTOS VARIABLES: Solo en el mes específico
+        const monthKey = `${expenseYear}-${String(expenseMonth + 1).padStart(2, '0')}`
+        
+        // Solo agregar si está en el rango del filtro
+        if (monthsInRange.includes(monthKey)) {
           if (!expensesMap.has(monthKey)) {
             expensesMap.set(monthKey, [])
           }
           
-          expensesMap.get(monthKey)!.push({
-            ...e,
-            amount: monthlyPayment,
-            payment_month: i + 1,
-            total_months: months,
-            is_installment_payment: true
-          })
+          expensesMap.get(monthKey)!.push(e)
         }
-      } else {
-        // Gastos normales (fijos o variables de una vez)
-        const monthKey = `${expenseYear}-${String(expenseMonth + 1).padStart(2, '0')}`
-        
-        if (!expensesMap.has(monthKey)) {
-          expensesMap.set(monthKey, [])
-        }
-        
-        expensesMap.get(monthKey)!.push(e)
       }
     })
     
-    // Ordenar meses (más recientes primero)
-    const sortedMonths = Array.from(expensesMap.keys()).sort().reverse()
+    // Ordenar meses (más recientes primero) y filtrar solo los que tienen gastos o están en el rango
+    const sortedMonths = Array.from(expensesMap.keys())
+      .filter(monthKey => monthsInRange.includes(monthKey))
+      .sort()
+      .reverse()
     
     return sortedMonths.map(monthKey => {
       const monthExpenses = expensesMap.get(monthKey) || []
@@ -503,7 +574,7 @@ export default function FinancePage({ params }: { params: { id: string } }) {
         total: fixedTotal + variableTotal
       }
     })
-  }, [expenses])
+  }, [expenses, expenseFilterStartMonth, expenseFilterEndMonth])
 
   // Calculate current salaries (most recent per user) and total payroll
   const currentSalaries = useMemo(() => {
@@ -779,7 +850,29 @@ export default function FinancePage({ params }: { params: { id: string } }) {
 
         {/* Expenses */}
         <section className="bg-white rounded-lg shadow-sm border p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Gastos</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Gastos</h2>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Desde:</label>
+                <Input
+                  type="month"
+                  value={expenseFilterStartMonth}
+                  onChange={(e) => setExpenseFilterStartMonth(e.target.value)}
+                  className="w-40"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Hasta:</label>
+                <Input
+                  type="month"
+                  value={expenseFilterEndMonth}
+                  onChange={(e) => setExpenseFilterEndMonth(e.target.value)}
+                  className="w-40"
+                />
+              </div>
+            </div>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-6 gap-3 items-end">
             <div className="md:col-span-2">
               <label className="block text-sm mb-1">Descripción</label>
@@ -860,13 +953,18 @@ export default function FinancePage({ params }: { params: { id: string } }) {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  {monthData.expenses.map((e: any) => (
-                    <div key={`${e.id}-${e.payment_month || ''}`} className="py-2 text-sm flex justify-between items-center bg-gray-50 px-3 rounded group">
+                  {monthData.expenses.map((e: any, idx: number) => (
+                    <div key={`${e.id}-${e.payment_month || ''}-${monthData.monthKey}-${idx}`} className="py-2 text-sm flex justify-between items-center bg-gray-50 px-3 rounded group">
                       <div className="flex-1">
                         <span className="font-medium">{e.description}</span>
                         <span className={`ml-2 px-2 py-0.5 text-xs rounded-full ${e.expense_type === 'fixed' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
                           {e.expense_type === 'fixed' ? 'Fijo' : 'Variable'}
                         </span>
+                        {e.is_replicated && (
+                          <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700">
+                            Replicado
+                          </span>
+                        )}
                         {e.is_installment_payment && (
                           <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-purple-100 text-purple-700">
                             Mes {e.payment_month}/{e.total_months} (MSI)
@@ -882,7 +980,7 @@ export default function FinancePage({ params }: { params: { id: string } }) {
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="font-semibold">{Number(e.amount).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}</div>
-                        {!e.is_installment_payment && (
+                        {!e.is_installment_payment && !e.is_replicated && (
                           <>
                             <Button variant="ghost" size="sm" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => handleEditExpense(e)}>
                               <Edit className="h-3 w-3" />
@@ -891,6 +989,9 @@ export default function FinancePage({ params }: { params: { id: string } }) {
                               <Trash2 className="h-3 w-3" />
                             </Button>
                           </>
+                        )}
+                        {e.is_replicated && (
+                          <span className="text-xs text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity">Edita el gasto original</span>
                         )}
                       </div>
                     </div>
