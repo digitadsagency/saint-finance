@@ -489,12 +489,19 @@ export class FinanceService {
       now, 
       now
     ]
-    // Usar append con INSERT_ROWS para asegurar que se inserte correctamente desde la columna A
-    await sheets.spreadsheets.values.append({
+    
+    // Primero, obtener la última fila con datos para insertar después
+    const existingData = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: 'expenses!A:L',
+      range: 'expenses!A:A'
+    })
+    const lastRow = (existingData.data.values?.length || 1) + 1
+    
+    // Insertar directamente en la siguiente fila disponible, asegurando que empiece en columna A
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `expenses!A${lastRow}:L${lastRow}`,
       valueInputOption: 'RAW',
-      insertDataOption: 'INSERT_ROWS',
       requestBody: { values: [row] }
     })
     return { 

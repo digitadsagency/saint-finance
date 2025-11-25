@@ -1065,19 +1065,19 @@ export default function FinancePage({ params }: { params: { id: string } }) {
               <div className="bg-blue-50 px-4 py-3 rounded-lg border border-blue-200">
                 <div className="text-xs text-gray-600 mb-1">Total Gastos Fijos (Mensual)</div>
                 <div className="text-lg font-bold text-blue-700">
-                  {expenses
-                    .filter(e => e.expense_type === 'fixed' && !e.is_installment)
-                    .reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
-                    .toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+                  {expensesByMonth.reduce((sum, month) => sum + month.fixedTotal, 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  Suma de todos los meses visibles
                 </div>
               </div>
               <div className="bg-orange-50 px-4 py-3 rounded-lg border border-orange-200">
                 <div className="text-xs text-gray-600 mb-1">Total Gastos Variables</div>
                 <div className="text-lg font-bold text-orange-700">
-                  {expenses
-                    .filter(e => e.expense_type === 'variable' && !e.is_installment)
-                    .reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
-                    .toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+                  {expensesByMonth.reduce((sum, month) => sum + month.variableTotal, 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  Suma de todos los meses visibles
                 </div>
               </div>
             </div>
