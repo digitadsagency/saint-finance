@@ -490,14 +490,29 @@ export class FinanceService {
       now
     ]
     
-    // Primero, obtener la última fila con datos para insertar después
+    // Obtener todas las filas para encontrar la última fila con datos válidos
     const existingData = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: 'expenses!A:A'
+      range: 'expenses!A2:L10000'
     })
-    const lastRow = (existingData.data.values?.length || 1) + 1
+    const rows = existingData.data.values || []
     
-    // Insertar directamente en la siguiente fila disponible, asegurando que empiece en columna A
+    // Encontrar la última fila que tenga al menos el ID (columna A) y workspace_id (columna B)
+    let lastRow = 1 // Empezar desde la fila 1 (después del header)
+    for (let i = rows.length - 1; i >= 0; i--) {
+      if (rows[i] && rows[i][0] && rows[i][1]) {
+        // Esta fila tiene datos válidos, la siguiente será lastRow + 1
+        lastRow = i + 2 // +2 porque empezamos desde A2 (fila 2) y necesitamos la siguiente
+        break
+      }
+    }
+    
+    // Si no hay datos, empezar desde la fila 2 (después del header)
+    if (rows.length === 0) {
+      lastRow = 2
+    }
+    
+    // Insertar directamente en la fila calculada, asegurando que empiece en columna A
     await sheets.spreadsheets.values.update({
       spreadsheetId,
       range: `expenses!A${lastRow}:L${lastRow}`,
