@@ -26,6 +26,9 @@ export interface Project {
   monthly_recording_sessions?: number // Sesiones de grabación al mes (3 horas por sesión)
   created_at: string
   updated_at: string
+  // Campos para trackear cambios de estado
+  paused_at?: string // Fecha en que se pausó (YYYY-MM-DD)
+  reactivated_at?: string // Fecha en que se reactivó (YYYY-MM-DD)
 }
 
 export interface CreateProjectData {
@@ -58,14 +61,35 @@ export class ProjectsService {
     return { sheets, spreadsheetId }
   }
 
+  // Helper to handle quota exceeded errors
+  private static async withRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        return await fn()
+      } catch (error: any) {
+        const status = error?.response?.status || error?.status || error?.code
+        const isQuotaError = status === 429 || error?.message?.includes('Quota exceeded')
+        
+        if (isQuotaError && attempt < retries) {
+          const delay = Math.min(2000 * Math.pow(2, attempt), 10000)
+          console.warn(`⚠️ Quota exceeded, retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`)
+          await new Promise(resolve => setTimeout(resolve, delay))
+          continue
+        }
+        throw error
+      }
+    }
+    throw new Error('Max retries exceeded')
+  }
+
   static async getAllProjects(workspaceId: string): Promise<Project[]> {
     try {
       const { sheets, spreadsheetId } = await this.getSheet()
       
-      const response = await sheets.spreadsheets.values.get({
+      const response = await this.withRetry(() => sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: 'projects!A2:W1000', // Expandido para incluir sesiones de grabación
-      })
+        range: 'projects!A2:Y1000', // Expandido para incluir paused_at y reactivated_at
+      }))
 
       const rows = response.data.values || []
       
@@ -96,7 +120,10 @@ export class ProjectsService {
           monthly_foto: parseInt(row[21]) || 0,
           monthly_recording_sessions: parseInt(row[22]) || 0,
           created_at: row[10] || new Date().toISOString(),
-          updated_at: row[11] || new Date().toISOString()
+          updated_at: row[11] || new Date().toISOString(),
+          // Campos de estado
+          paused_at: row[23] || undefined,
+          reactivated_at: row[24] || undefined
         }))
     } catch (error) {
       console.error('Error fetching projects:', error)
@@ -136,17 +163,20 @@ export class ProjectsService {
         data.monthly_foto_simple || 0,
         data.monthly_foto_elaborada || 0,
         data.monthly_foto || 0,
-        data.monthly_recording_sessions || 0
+        data.monthly_recording_sessions || 0,
+        // Campos de estado (vacíos al crear)
+        '', // paused_at
+        ''  // reactivated_at
       ]
 
-      await sheets.spreadsheets.values.append({
+      await this.withRetry(() => sheets.spreadsheets.values.append({
         spreadsheetId,
-        range: 'projects!A:W',
+        range: 'projects!A:Y',
         valueInputOption: 'RAW',
         requestBody: {
           values: [newProject]
         }
-      })
+      }))
 
       console.log('✅ Project created in Google Sheets:', projectId)
 
@@ -175,7 +205,9 @@ export class ProjectsService {
         monthly_foto: data.monthly_foto || 0,
         monthly_recording_sessions: data.monthly_recording_sessions || 0,
         created_at: now,
-        updated_at: now
+        updated_at: now,
+        paused_at: undefined,
+        reactivated_at: undefined
       }
     } catch (error) {
       console.error('Error creating project:', error)
@@ -187,11 +219,11 @@ export class ProjectsService {
     try {
       const { sheets, spreadsheetId } = await this.getSheet()
       
-      // Get all projects to find the row (hasta columna W para incluir todos los campos)
-      const response = await sheets.spreadsheets.values.get({
+      // Get all projects to find the row (hasta columna Y para incluir todos los campos)
+      const response = await this.withRetry(() => sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: 'projects!A2:W1000',
-      })
+        range: 'projects!A2:Y1000',
+      }))
 
       const rows = response.data.values || []
       const projectIndex = rows.findIndex(row => row[0] === projectId)
@@ -204,10 +236,31 @@ export class ProjectsService {
       
       // Update the row - asegurar que tenga todas las columnas necesarias
       const updatedRow = [...rows[projectIndex]]
-      // Asegurar que el array tenga al menos 23 elementos (columnas A-W)
-      while (updatedRow.length < 23) {
+      // Asegurar que el array tenga al menos 25 elementos (columnas A-Y)
+      while (updatedRow.length < 25) {
         updatedRow.push('')
       }
+      
+      // Detectar cambio de estado para manejar fechas de pausa/reactivación
+      const currentStatus = updatedRow[4] || 'active'
+      const newStatus = updates.status || currentStatus
+      const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
+      
+      // Si el estado cambia a 'paused' y antes no estaba pausado
+      if (newStatus === 'paused' && currentStatus !== 'paused') {
+        updatedRow[23] = today // paused_at
+        console.log(`📅 Cliente pausado en: ${today}`)
+      }
+      
+      // Si el estado cambia de 'paused' a 'active' (reactivación)
+      if (newStatus === 'active' && currentStatus === 'paused') {
+        updatedRow[24] = today // reactivated_at
+        console.log(`📅 Cliente reactivado en: ${today}`)
+      }
+      
+      // Si se pasa explícitamente paused_at o reactivated_at en updates, usarlos
+      if (updates.paused_at !== undefined) updatedRow[23] = updates.paused_at || ''
+      if (updates.reactivated_at !== undefined) updatedRow[24] = updates.reactivated_at || ''
       
       // Actualizar campos básicos
       if (updates.name !== undefined) updatedRow[2] = updates.name
@@ -237,14 +290,14 @@ export class ProjectsService {
       if (updates.monthly_foto !== undefined) updatedRow[21] = updates.monthly_foto || 0
       if (updates.monthly_recording_sessions !== undefined) updatedRow[22] = updates.monthly_recording_sessions || 0
 
-      await sheets.spreadsheets.values.update({
+      await this.withRetry(() => sheets.spreadsheets.values.update({
         spreadsheetId,
-        range: `projects!A${rowNumber}:W${rowNumber}`,
+        range: `projects!A${rowNumber}:Y${rowNumber}`,
         valueInputOption: 'RAW',
         requestBody: {
           values: [updatedRow]
         }
-      })
+      }))
 
       console.log('✅ Project updated in Google Sheets:', projectId)
 
@@ -273,7 +326,9 @@ export class ProjectsService {
         monthly_foto: parseInt(updatedRow[21]) || 0,
         monthly_recording_sessions: parseInt(updatedRow[22]) || 0,
         created_at: updatedRow[10] || new Date().toISOString(),
-        updated_at: updatedRow[11] || new Date().toISOString()
+        updated_at: updatedRow[11] || new Date().toISOString(),
+        paused_at: updatedRow[23] || undefined,
+        reactivated_at: updatedRow[24] || undefined
       }
     } catch (error) {
       console.error('Error updating project:', error)
@@ -285,10 +340,10 @@ export class ProjectsService {
     try {
       const { sheets, spreadsheetId } = await this.getSheet()
       
-      const response = await sheets.spreadsheets.values.get({
+      const response = await this.withRetry(() => sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: 'projects!A2:W1000',
-      })
+        range: 'projects!A2:Y1000',
+      }))
 
       const rows = response.data.values || []
       const projectIndex = rows.findIndex(row => row[0] === projectId)
@@ -298,13 +353,13 @@ export class ProjectsService {
       }
 
       // Get sheet ID
-      const metadata = await sheets.spreadsheets.get({ spreadsheetId })
+      const metadata = await this.withRetry(() => sheets.spreadsheets.get({ spreadsheetId }))
       const sheet = metadata.data.sheets?.find(s => s.properties?.title === 'projects')
       if (!sheet?.properties?.sheetId) {
         throw new Error('Projects sheet not found')
       }
 
-      await sheets.spreadsheets.batchUpdate({
+      await this.withRetry(() => sheets.spreadsheets.batchUpdate({
         spreadsheetId,
         requestBody: {
           requests: [{
@@ -318,7 +373,7 @@ export class ProjectsService {
             }
           }]
         }
-      })
+      }))
 
       console.log('✅ Project deleted from Google Sheets:', projectId)
     } catch (error) {

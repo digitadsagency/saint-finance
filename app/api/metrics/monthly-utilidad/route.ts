@@ -7,6 +7,35 @@ function isValidMonth(m?: string | null) {
   return /^\d{4}-\d{2}$/.test(m)
 }
 
+// Helper para determinar si un cliente estaba activo en un mes específico
+// Lógica simple: si está pausado desde mes X, NO cuenta desde ese mes en adelante
+function isClientActiveInMonth(project: any, monthStr: string): boolean {
+  // monthStr en formato "YYYY-MM"
+  
+  // Si el cliente está completado, no está activo
+  if (project.status === 'completed') return false
+  
+  // Si el cliente está activo, cuenta siempre
+  if (project.status === 'active') return true
+  
+  // Cliente pausado - verificar desde qué mes está pausado
+  if (project.status === 'paused') {
+    const pausedAt = project.paused_at // YYYY-MM-DD
+    
+    // Si no tiene fecha de pausa específica, no cuenta
+    if (!pausedAt) return false
+    
+    // Extraer el mes de pausa (YYYY-MM)
+    const pausedMonth = pausedAt.substring(0, 7) // "2025-02-01" -> "2025-02"
+    
+    // Si el mes consultado es ANTERIOR al mes de pausa, el cliente estaba activo
+    // Si el mes es IGUAL o POSTERIOR al mes de pausa, ya no está activo
+    return monthStr < pausedMonth
+  }
+  
+  return false
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -37,14 +66,6 @@ export async function GET(request: NextRequest) {
       .filter((e: any) => e.expense_type === 'fixed' && !e.is_installment)
       .reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0)
     
-    // Ingresos esperados mensuales (facturación mensual de clientes ACTIVOS solamente)
-    const ingresosEsperadosMensuales = (billings || []).reduce((sum: number, b: any) => {
-      // Filtrar solo clientes activos
-      const project = projects.find((p: any) => p.id === b.project_id)
-      if (project?.status !== 'active') return sum
-      return sum + (Number(b.monthly_amount) || 0)
-    }, 0)
-    
     // Generar datos para cada mes
     const [startYear, startMonthNum] = startMonth.split('-').map(Number)
     const [endYear, endMonthNum] = endMonth.split('-').map(Number)
@@ -59,8 +80,12 @@ export async function GET(request: NextRequest) {
         const monthStr = `${year}-${String(month).padStart(2, '0')}`
         const monthPrefix = monthStr + '-'
         
-        // Ingresos esperados (siempre el mismo)
-        const ingresosEsperados = ingresosEsperadosMensuales
+        // Ingresos esperados POR MES (solo clientes activos en ese mes específico)
+        const ingresosEsperados = (billings || []).reduce((sum: number, b: any) => {
+          const project = projects.find((p: any) => p.id === b.project_id)
+          if (!project || !isClientActiveInMonth(project, monthStr)) return sum
+          return sum + (Number(b.monthly_amount) || 0)
+        }, 0)
         
         // Ingresos reales (pagos recibidos en este mes)
         const ingresosReales = (payments || [])

@@ -5,6 +5,19 @@ import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { X, Save, Calendar, Users, Target } from 'lucide-react'
 
+// Generar opciones de mes (últimos 12 meses + próximos 6)
+function getMonthOptions() {
+  const options: { value: string; label: string }[] = []
+  const now = new Date()
+  for (let i = -12; i <= 6; i++) {
+    const date = new Date(now.getFullYear(), now.getMonth() + i, 1)
+    const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+    const label = date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
+    options.push({ value, label: label.charAt(0).toUpperCase() + label.slice(1) })
+  }
+  return options
+}
+
 interface ProjectEditModalProps {
   isOpen: boolean
   onClose: () => void
@@ -17,6 +30,7 @@ export function ProjectEditModal({ isOpen, onClose, onProjectUpdated, project }:
     name: '',
     description: '',
     status: 'active' as 'active' | 'paused' | 'completed',
+    paused_at: '', // Mes desde el que está pausado (YYYY-MM)
     // Audiovisual/Video
     monthly_reel_corto: 0,
     monthly_reel_largo: 0,
@@ -37,10 +51,20 @@ export function ProjectEditModal({ isOpen, onClose, onProjectUpdated, project }:
   // Cargar datos del proyecto cuando se abre el modal
   useEffect(() => {
     if (isOpen && project) {
+      // Convertir paused_at de YYYY-MM-DD a YYYY-MM si existe
+      let pausedMonth = ''
+      if (project.paused_at) {
+        const parts = project.paused_at.split('-')
+        if (parts.length >= 2) {
+          pausedMonth = `${parts[0]}-${parts[1]}`
+        }
+      }
+      
       setFormData({
         name: project.name || '',
         description: project.description || '',
         status: project.status || 'active',
+        paused_at: pausedMonth,
         monthly_reel_corto: project.monthly_reel_corto || 0,
         monthly_reel_largo: project.monthly_reel_largo || 0,
         monthly_reel: project.monthly_reel || 0,
@@ -60,9 +84,18 @@ export function ProjectEditModal({ isOpen, onClose, onProjectUpdated, project }:
     e.preventDefault()
     if (!project?.id) return
     
+    // Validar que si está pausado, tenga mes de pausa
+    if (formData.status === 'paused' && !formData.paused_at) {
+      alert('Por favor selecciona el mes desde el que está pausado el cliente')
+      return
+    }
+    
     setIsLoading(true)
 
     try {
+      // Convertir mes de pausa (YYYY-MM) a fecha completa (YYYY-MM-01)
+      const pausedAtDate = formData.paused_at ? `${formData.paused_at}-01` : ''
+      
       const response = await fetch(`/api/projects/${project.id}`, {
         method: 'PUT',
         headers: {
@@ -72,6 +105,8 @@ export function ProjectEditModal({ isOpen, onClose, onProjectUpdated, project }:
           name: formData.name,
           description: formData.description,
           status: formData.status,
+          paused_at: formData.status === 'paused' ? pausedAtDate : '', // Solo guardar si está pausado
+          reactivated_at: formData.status === 'active' && project.status === 'paused' ? new Date().toISOString().split('T')[0] : project.reactivated_at || '',
           priority: project.priority || 'medium',
           deadline: project.deadline || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
           // Audiovisual/Video
@@ -97,13 +132,19 @@ export function ProjectEditModal({ isOpen, onClose, onProjectUpdated, project }:
         onProjectUpdated(updatedProject)
         onClose()
       } else {
-        const errorData = await response.json()
+        const errorData = await response.json().catch(() => ({ error: 'Error desconocido' }))
         console.error('Error updating client:', errorData)
-        alert('❌ Error al actualizar el cliente. Inténtalo de nuevo.')
+        const errorMsg = errorData.error || response.statusText || 'Error desconocido'
+        alert(`❌ Error al actualizar el cliente: ${errorMsg}. Inténtalo de nuevo.`)
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating client:', error)
-      alert('❌ Error de conexión. Inténtalo de nuevo.')
+      const isQuotaError = error?.message?.includes('Quota') || error?.message?.includes('429')
+      if (isQuotaError) {
+        alert('❌ Se excedió la cuota de Google Sheets. Espera unos segundos e inténtalo de nuevo.')
+      } else {
+        alert('❌ Error de conexión. Inténtalo de nuevo.')
+      }
     } finally {
       setIsLoading(false)
     }
@@ -158,7 +199,17 @@ export function ProjectEditModal({ isOpen, onClose, onProjectUpdated, project }:
             </label>
             <select
               value={formData.status}
-              onChange={(e) => setFormData({ ...formData, status: e.target.value as 'active' | 'paused' | 'completed' })}
+              onChange={(e) => {
+                const newStatus = e.target.value as 'active' | 'paused' | 'completed'
+                setFormData({ 
+                  ...formData, 
+                  status: newStatus,
+                  // Si cambia a pausado y no tiene mes, poner el mes actual
+                  paused_at: newStatus === 'paused' && !formData.paused_at 
+                    ? `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+                    : formData.paused_at
+                })
+              }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="active">Activo</option>
@@ -166,6 +217,28 @@ export function ProjectEditModal({ isOpen, onClose, onProjectUpdated, project }:
               <option value="completed">Completado</option>
             </select>
           </div>
+
+          {/* Selector de mes de pausa - solo visible cuando está pausado */}
+          {formData.status === 'paused' && (
+            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <label className="block text-sm font-medium text-yellow-800 mb-2">
+                📅 Pausado desde el mes de:
+              </label>
+              <select
+                value={formData.paused_at}
+                onChange={(e) => setFormData({ ...formData, paused_at: e.target.value })}
+                className="w-full px-3 py-2 border border-yellow-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
+              >
+                <option value="">Selecciona el mes...</option>
+                {getMonthOptions().map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+              <p className="text-xs text-yellow-700 mt-2">
+                El cliente NO aparecerá en ingresos esperados ni calendario de pagos desde este mes en adelante.
+              </p>
+            </div>
+          )}
 
           {/* Audiovisual/Video */}
           <div className="space-y-4">

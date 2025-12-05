@@ -108,14 +108,36 @@ export class FinanceService {
     }
   }
 
+  // Helper to handle quota exceeded errors with exponential backoff
+  private static async withRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        return await fn()
+      } catch (error: any) {
+        const status = error?.response?.status || error?.status || error?.code
+        const isQuotaError = status === 429 || error?.message?.includes('Quota exceeded')
+        
+        if (isQuotaError && attempt < retries) {
+          // Exponential backoff: 2s, 4s, 8s
+          const delay = Math.min(2000 * Math.pow(2, attempt), 10000)
+          console.warn(`⚠️ Quota exceeded, retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`)
+          await new Promise(resolve => setTimeout(resolve, delay))
+          continue
+        }
+        throw error
+      }
+    }
+    throw new Error('Max retries exceeded')
+  }
+
   // SALARIES
   static async listSalaries(workspaceId: string): Promise<SalaryRecord[]> {
     await this.ensureSheetExists('salaries', ['id','workspace_id','user_id','monthly_salary','effective_month','notes','created_at','updated_at'])
     const { sheets, spreadsheetId } = await this.getSheet()
-    const res = await sheets.spreadsheets.values.get({
+    const res = await this.withRetry(() => sheets.spreadsheets.values.get({
       spreadsheetId,
       range: 'salaries!A2:H10000'
-    })
+    }))
     const rows = res.data.values || []
     return rows
       .filter(r => r[1] === workspaceId)
@@ -150,10 +172,10 @@ export class FinanceService {
   static async listClientBilling(workspaceId: string): Promise<ClientBillingRecord[]> {
     await this.ensureSheetExists('client_billing', ['id','workspace_id','project_id','monthly_amount','payment_day','created_at','updated_at'])
     const { sheets, spreadsheetId } = await this.getSheet()
-    const res = await sheets.spreadsheets.values.get({
+    const res = await this.withRetry(() => sheets.spreadsheets.values.get({
       spreadsheetId,
       range: 'client_billing!A2:H10000'
-    })
+    }))
     const rows = res.data.values || []
     return rows
       .filter(r => r[1] === workspaceId)
@@ -241,10 +263,10 @@ export class FinanceService {
   static async listPaymentRecords(workspaceId: string, month?: string): Promise<PaymentRecord[]> {
     await this.ensureSheetExists('payment_records', ['id','workspace_id','project_id','billing_id','expected_amount','paid_amount','expected_date','paid_date','is_on_time','days_delay','notes','created_at','updated_at'])
     const { sheets, spreadsheetId } = await this.getSheet()
-    const res = await sheets.spreadsheets.values.get({
+    const res = await this.withRetry(() => sheets.spreadsheets.values.get({
       spreadsheetId,
       range: 'payment_records!A2:M10000'
-    })
+    }))
     const rows = res.data.values || []
     let records = rows
       .filter(r => r[1] === workspaceId)
@@ -448,10 +470,10 @@ export class FinanceService {
   static async listWorklogs(workspaceId: string): Promise<WorklogRecord[]> {
     await this.ensureSheetExists('worklogs', ['id','workspace_id','user_id','project_id','type','hours','date','notes','created_at','updated_at'])
     const { sheets, spreadsheetId } = await this.getSheet()
-    const res = await sheets.spreadsheets.values.get({
+    const res = await this.withRetry(() => sheets.spreadsheets.values.get({
       spreadsheetId,
       range: 'worklogs!A2:J10000'
-    })
+    }))
     const rows = res.data.values || []
     return rows
       .filter(r => r[1] === workspaceId)
@@ -488,10 +510,10 @@ export class FinanceService {
   static async listExpenses(workspaceId: string): Promise<ExpenseRecord[]> {
     await this.ensureSheetExists('expenses', ['id','workspace_id','description','amount','expense_type','date','is_installment','installment_months','monthly_payment','notes','created_at','updated_at'])
     const { sheets, spreadsheetId } = await this.getSheet()
-    const res = await sheets.spreadsheets.values.get({
+    const res = await this.withRetry(() => sheets.spreadsheets.values.get({
       spreadsheetId,
       range: 'expenses!A2:L10000'
-    })
+    }))
     const rows = res.data.values || []
     return rows
       .filter(r => r[1] === workspaceId)
@@ -692,10 +714,10 @@ export class FinanceService {
   static async listIncomes(workspaceId: string): Promise<IncomeRecord[]> {
     await this.ensureSheetExists('incomes', ['id','workspace_id','description','amount','date','project_id','notes','created_at','updated_at'])
     const { sheets, spreadsheetId } = await this.getSheet()
-    const res = await sheets.spreadsheets.values.get({
+    const res = await this.withRetry(() => sheets.spreadsheets.values.get({
       spreadsheetId,
       range: 'incomes!A2:I10000'
-    })
+    }))
     const rows = res.data.values || []
     return rows
       .filter(r => r[1] === workspaceId)

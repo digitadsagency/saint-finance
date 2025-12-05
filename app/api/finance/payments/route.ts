@@ -1,15 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { FinanceService } from '@/lib/services/finance'
 
-function isAdminUser(user: any): boolean {
-  if (!user) return false
-  // Accept both object {name, username} and string
-  const name = typeof user === 'string' 
-    ? user.toLowerCase()
-    : (user.name || user.username || '').toLowerCase()
-  return name === 'miguel' || name === 'raul'
-}
-
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -31,9 +22,6 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    if (!isAdminUser(body.current_user)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
 
     // Calculate expected_date from billing record's payment_day
     const billingRecords = await FinanceService.listClientBilling(body.workspace_id)
@@ -67,9 +55,6 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
-    if (!isAdminUser(body.current_user)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
 
     if (!body.id) {
       return NextResponse.json({ error: 'Payment record id is required' }, { status: 400 })
@@ -111,10 +96,6 @@ export async function DELETE(request: NextRequest) {
 
     if (!id) {
       return NextResponse.json({ error: 'Payment record id is required' }, { status: 400 })
-    }
-
-    if (!isAdminUser(currentUser)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     await FinanceService.deletePaymentRecord(id)

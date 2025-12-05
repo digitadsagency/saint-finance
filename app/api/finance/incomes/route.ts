@@ -1,13 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { FinanceService } from '@/lib/services/finance'
 
-function isAdminUser(userNameOrUsername?: string | { name?: string; username?: string }) {
-  if (!userNameOrUsername) return false
-  const v = typeof userNameOrUsername === 'string' 
-    ? userNameOrUsername.toLowerCase() 
-    : (userNameOrUsername.name || userNameOrUsername.username || '').toLowerCase()
-  return v === 'miguel' || v === 'raul'
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -23,9 +16,6 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    if (!isAdminUser(body.current_user)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
 
     const record = await FinanceService.createIncome({
       workspace_id: body.workspace_id,
@@ -44,9 +34,6 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
-    if (!isAdminUser(body.current_user)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
 
     if (!body.id) {
       return NextResponse.json({ error: 'Income id is required' }, { status: 400 })
@@ -73,10 +60,6 @@ export async function DELETE(request: NextRequest) {
 
     if (!id) {
       return NextResponse.json({ error: 'Income id is required' }, { status: 400 })
-    }
-
-    if (!isAdminUser(currentUser)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     await FinanceService.deleteIncome(id)

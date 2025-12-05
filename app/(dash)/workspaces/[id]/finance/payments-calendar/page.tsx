@@ -5,12 +5,56 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/useAuth'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, DollarSign, Calendar as CalendarIcon, CheckCircle, AlertCircle, Plus, Edit, Trash2 } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ArrowLeft, DollarSign, Calendar as CalendarIcon, CheckCircle, AlertCircle, Plus, Edit, Trash2, RefreshCw } from 'lucide-react'
 import { PaymentRecordDialog } from '@/components/PaymentRecordDialog'
 import { toLocalYMD } from '@/lib/time'
 
 function formatMXN(value: number) {
   return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(value || 0)
+}
+
+// Generar lista de meses para filtro
+function getMonthOptions() {
+  const options: { value: string; label: string }[] = []
+  const now = new Date()
+  // 12 meses atrás hasta 6 meses adelante
+  for (let i = -12; i <= 6; i++) {
+    const date = new Date(now.getFullYear(), now.getMonth() + i, 1)
+    const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+    const label = date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
+    options.push({ value, label: label.charAt(0).toUpperCase() + label.slice(1) })
+  }
+  return options
+}
+
+// Helper para determinar si un cliente estaba activo en un mes específico
+// Lógica simple: si está pausado desde mes X, NO cuenta desde ese mes en adelante
+function isClientActiveInMonth(project: any, monthStr: string): boolean {
+  if (!project) return false
+  
+  // Si el cliente está completado, no está activo
+  if (project.status === 'completed') return false
+  
+  // Si el cliente está activo, cuenta siempre
+  if (project.status === 'active') return true
+  
+  // Cliente pausado - verificar desde qué mes está pausado
+  if (project.status === 'paused') {
+    const pausedAt = project.paused_at // YYYY-MM-DD
+    
+    // Si no tiene fecha de pausa específica, no cuenta
+    if (!pausedAt) return false
+    
+    // Extraer el mes de pausa (YYYY-MM)
+    const pausedMonth = pausedAt.substring(0, 7) // "2025-02-01" -> "2025-02"
+    
+    // Si el mes consultado es ANTERIOR al mes de pausa, el cliente estaba activo
+    // Si el mes es IGUAL o POSTERIOR al mes de pausa, ya no está activo
+    return monthStr < pausedMonth
+  }
+  
+  return false
 }
 
 export default function PaymentsCalendarPage({ params }: { params: { id: string } }) {
@@ -26,22 +70,17 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
   const [selectedDayForPayment, setSelectedDayForPayment] = useState<string | null>(null)
   const [selectedBillingForPayment, setSelectedBillingForPayment] = useState<string | null>(null)
   const [editingPayment, setEditingPayment] = useState<any | null>(null)
-  const isAdmin = useMemo(() => {
-    const name = (user?.name || '').toLowerCase()
-    return name === 'miguel' || name === 'raul'
-  }, [user])
-
+  const [summaryMonthFilter, setSummaryMonthFilter] = useState<string>(() => {
+    const now = new Date()
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  })
+  const [summaryStatusFilter, setSummaryStatusFilter] = useState<string>('all') // 'all', 'paid', 'pending', 'partial'
+  const [isRefreshing, setIsRefreshing] = useState(false)
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/sign-in')
     }
   }, [user, authLoading, router])
-
-  useEffect(() => {
-    if (!authLoading && user && !isAdmin) {
-      router.push(`/workspaces/${params.id}/dashboard`)
-    }
-  }, [authLoading, user, isAdmin, params.id, router])
 
   useEffect(() => {
     const loadData = async () => {
@@ -85,10 +124,10 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
       }
     }
 
-    if (user && isAdmin) {
+    if (user) {
       loadData()
     }
-  }, [user, isAdmin, params.id, selectedDate])
+  }, [user, params.id, selectedDate])
 
   // Calcular estadísticas - DEBE ESTAR ANTES DE CUALQUIER RETURN CONDICIONAL
   const paymentStats = useMemo(() => {
@@ -159,69 +198,144 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
   }, [allPaymentRecords, projects])
 
   // Calcular totales del mes - DEBE ESTAR ANTES DE CUALQUIER RETURN CONDICIONAL
-  // Solo incluir clientes activos
+  // Solo incluir clientes activos EN EL MES SELECCIONADO
+  const currentMonthStr = useMemo(() => {
+    return `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}`
+  }, [selectedDate])
+
   const totalMonthPayments = useMemo(() => {
     return billings.reduce((sum, b) => {
       const project = projects.find(p => p.id === (b.project_id || b.projectId))
-      if (project?.status !== 'active') return sum
+      if (!isClientActiveInMonth(project, currentMonthStr)) return sum
       return sum + Number(b.monthly_amount || b.monthlyAmountMXN || 0)
     }, 0)
-  }, [billings, projects])
+  }, [billings, projects, currentMonthStr])
 
   const uniqueClients = useMemo(() => {
-    // Solo contar clientes activos
+    // Solo contar clientes activos en el mes actual
     return new Set(billings
       .filter(b => {
         const project = projects.find(p => p.id === (b.project_id || b.projectId))
-        return project?.status === 'active'
+        return isClientActiveInMonth(project, currentMonthStr)
       })
       .map(b => b.project_id || b.projectId)
     ).size
-  }, [billings, projects])
+  }, [billings, projects, currentMonthStr])
 
-  // Tabla de resumen de pagos del mes (solo clientes activos)
+  // Tabla de resumen de pagos del mes (solo clientes activos EN ESE MES) - con filtro independiente
   const monthlyPaymentSummary = useMemo(() => {
-    if (!selectedDate) return []
-    const monthStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}`
+    if (!summaryMonthFilter) return []
+    const [filterYear, filterMonth] = summaryMonthFilter.split('-').map(Number)
+    
     const summary = billings
       .filter(b => {
         const project = projects.find(p => p.id === (b.project_id || b.projectId))
-        return project?.status === 'active'
+        return isClientActiveInMonth(project, summaryMonthFilter)
       })
       .map(b => {
         const project = projects.find(p => p.id === (b.project_id || b.projectId))
         const expectedAmount = Number(b.monthly_amount || b.monthlyAmountMXN || 0)
         const paymentDay = Number(b.payment_day || b.paymentDay || 0)
-        const expectedDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), paymentDay)
+        const expectedDate = new Date(filterYear, filterMonth - 1, paymentDay)
         const expectedDateStr = toLocalYMD(expectedDate)
         
-        // Buscar si hay un pago registrado para este billing en este mes
-        const payment = paymentRecords.find(pr => 
-          pr.billing_id === b.id && 
-          pr.paid_date === expectedDateStr
-        )
+        // Buscar pagos de este cliente en este mes (más flexible)
+        const paymentsForClient = allPaymentRecords.filter(pr => {
+          const prProjectId = pr.project_id || pr.projectId
+          const billingProjectId = b.project_id || b.projectId
+          
+          // Verificar si el pago corresponde a este billing o proyecto
+          const matchesBilling = pr.billing_id === b.id
+          const matchesProject = prProjectId === billingProjectId
+          
+          // Verificar si el pago es de este mes
+          if (!pr.paid_date) return false
+          const paidDate = new Date(pr.paid_date)
+          const paidYear = paidDate.getFullYear()
+          const paidMonth = paidDate.getMonth() + 1
+          const isInMonth = paidYear === filterYear && paidMonth === filterMonth
+          
+          return isInMonth && (matchesBilling || matchesProject)
+        })
         
-        const paidAmount = payment ? Number(payment.paid_amount || 0) : 0
-        const isPaid = paidAmount > 0
-        const isComplete = isPaid && paidAmount >= expectedAmount
-        const isOnTime = payment ? payment.is_on_time : false
+        // Sumar todos los pagos del cliente en este mes
+        const totalPaidAmount = paymentsForClient.reduce((sum, pr) => sum + Number(pr.paid_amount || 0), 0)
+        const isPaid = totalPaidAmount > 0
+        const isComplete = isPaid && totalPaidAmount >= expectedAmount
+        const isPartial = isPaid && !isComplete
+        
+        // Usar el primer pago para determinar si fue a tiempo
+        const mainPayment = paymentsForClient[0]
+        const isOnTime = mainPayment ? mainPayment.is_on_time : false
+        const daysDelay = mainPayment?.days_delay || 0
         
         return {
           clientName: project?.name || 'Cliente',
+          projectId: b.project_id || b.projectId,
           expectedDate: expectedDateStr,
           expectedAmount,
-          paidAmount,
+          paidAmount: totalPaidAmount,
           isPaid,
           isComplete,
+          isPartial,
           isOnTime,
-          daysDelay: payment?.days_delay || 0,
-          paymentId: payment?.id
+          daysDelay,
+          paymentId: mainPayment?.id,
+          paymentsCount: paymentsForClient.length
         }
       })
+      // Filtrar por estado
+      .filter(item => {
+        if (summaryStatusFilter === 'all') return true
+        if (summaryStatusFilter === 'paid') return item.isComplete
+        if (summaryStatusFilter === 'pending') return !item.isPaid
+        if (summaryStatusFilter === 'partial') return item.isPartial
+        return true
+      })
+      // Ordenar por fecha esperada (cronológico ascendente - antes primero)
       .sort((a, b) => new Date(a.expectedDate).getTime() - new Date(b.expectedDate).getTime())
     
     return summary
-  }, [billings, projects, paymentRecords, selectedDate])
+  }, [billings, projects, allPaymentRecords, summaryMonthFilter, summaryStatusFilter])
+
+  // Función para refrescar datos
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    try {
+      const monthStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}`
+      
+      const [billingsRes, projectsRes, paymentsResMonth, allPaymentsRes] = await Promise.all([
+        fetch(`/api/finance/client-billing?workspaceId=${params.id}`),
+        fetch(`/api/projects?workspaceId=${params.id}`),
+        fetch(`/api/finance/payments?workspaceId=${params.id}&month=${monthStr}`),
+        fetch(`/api/finance/payments?workspaceId=${params.id}`)
+      ])
+
+      if (billingsRes?.ok) {
+        const data = await billingsRes.json()
+        setBillings(Array.isArray(data) ? data : [])
+      }
+      
+      if (projectsRes?.ok) {
+        const data = await projectsRes.json()
+        setProjects(Array.isArray(data) ? data : [])
+      }
+      
+      if (paymentsResMonth?.ok) {
+        const data = await paymentsResMonth.json()
+        setPaymentRecords(Array.isArray(data) ? data : [])
+      }
+      
+      if (allPaymentsRes?.ok) {
+        const allData = await allPaymentsRes.json()
+        setAllPaymentRecords(Array.isArray(allData) ? allData : [])
+      }
+    } catch (error) {
+      console.error('Error refreshing data:', error)
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
 
   // Ahora sí, los returns condicionales DESPUÉS de todos los hooks
   if (authLoading || loading) {
@@ -232,16 +346,16 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
     )
   }
 
-  if (!user || !isAdmin) return null
+  if (!user) return null
 
-  // Obtener pagos esperados por día del mes (solo clientes ACTIVOS)
+  // Obtener pagos esperados por día del mes (solo clientes ACTIVOS EN EL MES ACTUAL)
   const getExpectedPaymentsForDay = (day: number) => {
     return billings.filter(b => {
       const paymentDay = Number(b.payment_day || b.paymentDay || 0)
       if (paymentDay !== day) return false
-      // Solo incluir clientes activos
+      // Solo incluir clientes activos en este mes
       const project = projects.find(p => p.id === (b.project_id || b.projectId))
-      return project?.status === 'active'
+      return isClientActiveInMonth(project, currentMonthStr)
     }).map(b => {
       const project = projects.find(p => p.id === (b.project_id || b.projectId))
       return {
@@ -411,10 +525,19 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
               </Button>
               <div>
                 <h1 className="text-xl font-semibold text-gray-900">Calendario de Pagos</h1>
-                <p className="text-sm text-gray-600">Solo visible para administradores</p>
+                <p className="text-sm text-gray-600">Gestión de pagos de clientes</p>
               </div>
             </div>
             <div className="flex items-center space-x-4">
+              <Button
+                variant="outline"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                size="sm"
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+                {isRefreshing ? 'Actualizando...' : 'Actualizar'}
+              </Button>
               <div className="text-right">
                 <div className="text-xs text-gray-500">Total del mes</div>
                 <div className="text-lg font-bold text-green-600">{formatMXN(totalMonthPayments)}</div>
@@ -475,48 +598,49 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
             <div className="grid grid-cols-7 gap-1">
               {calendarDays.map((date, index) => {
                 if (!date) {
-                  return <div key={`empty-${index}`} className="min-h-[140px] p-2 bg-gray-50 rounded-lg" />
+                  return <div key={`empty-${index}`} className="min-h-[100px] p-1.5 bg-gray-50 rounded-lg" />
                 }
 
                 const expectedPayments = getExpectedPaymentsForDay(date.getDate())
                 const paidPayments = getPaidPaymentsForDay(date)
                 const isTodayDate = isToday(date)
                 const isCurrentMonthDay = isCurrentMonth(date)
+                const hasPayments = expectedPayments.length > 0 || paidPayments.length > 0
 
                 return (
                   <div
                     key={index}
                     className={`
-                      min-h-[140px] p-2 border border-gray-200 rounded-lg
+                      min-h-[100px] p-1.5 border border-gray-200 rounded-lg overflow-hidden
                       ${isCurrentMonthDay ? 'bg-white' : 'bg-gray-50'}
                       ${isTodayDate ? 'ring-2 ring-blue-500' : ''}
-                      ${expectedPayments.length > 0 || paidPayments.length > 0 ? 'bg-green-50 border-green-300' : ''}
+                      ${hasPayments ? 'bg-green-50/50 border-green-200' : ''}
                     `}
                   >
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center justify-between mb-1">
                       <span className={`
-                        text-sm font-medium
+                        text-xs font-medium
                         ${isCurrentMonthDay ? 'text-gray-900' : 'text-gray-400'}
                         ${isTodayDate ? 'text-blue-600 font-bold' : ''}
                       `}>
                         {date.getDate()}
                       </span>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-0.5">
                         {expectedPayments.length > 0 && (
-                          <Badge className="bg-blue-100 text-blue-700 border-blue-300 text-xs">
+                          <Badge className="bg-blue-100 text-blue-700 border-blue-300 text-[10px] px-1 py-0">
                             {expectedPayments.length}
                           </Badge>
                         )}
                         {paidPayments.length > 0 && (
-                          <Badge className="bg-green-100 text-green-700 border-green-300 text-xs">
-                            {paidPayments.length}
+                          <Badge className="bg-green-100 text-green-700 border-green-300 text-[10px] px-1 py-0">
+                            ✓{paidPayments.length}
                           </Badge>
                         )}
                         {isCurrentMonthDay && (
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-5 w-5 p-0"
+                            className="h-4 w-4 p-0"
                             onClick={() => handleRegisterPayment(date)}
                             title="Registrar pago"
                           >
@@ -526,80 +650,64 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
                       </div>
                     </div>
                     
-                    <div className="space-y-1">
-                      {/* Pagos esperados */}
+                    <div className="space-y-0.5 max-h-[80px] overflow-y-auto">
+                      {/* Pagos esperados - formato compacto */}
                       {expectedPayments.map((payment) => {
                         const hasPaid = paidPayments.some(pp => pp.billing_id === payment.id)
                         const paymentId = payment.id || payment.project_id || payment.projectId
                         return (
                           <div
                             key={`expected-${paymentId}`}
-                            className={`p-1.5 rounded border text-xs ${
+                            className={`px-1 py-0.5 rounded text-[10px] ${
                               hasPaid 
-                                ? 'bg-green-100 border-green-300' 
-                                : 'bg-yellow-50 border-yellow-200'
+                                ? 'bg-green-200/50 text-green-800' 
+                                : 'bg-yellow-100 text-yellow-800'
                             }`}
+                            title={`${payment.projectName}: ${formatMXN(payment.amount)}`}
                           >
-                            <div className="flex items-center space-x-1 mb-1">
-                              <DollarSign className={`h-3 w-3 ${hasPaid ? 'text-green-600' : 'text-yellow-600'}`} />
-                              <span className={`font-medium truncate ${hasPaid ? 'text-green-800' : 'text-yellow-800'}`}>
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="font-medium truncate max-w-[60px]">
                                 {payment.projectName}
                               </span>
-                            </div>
-                            <div className={`font-semibold ${hasPaid ? 'text-green-700' : 'text-yellow-700'}`}>
-                              {formatMXN(payment.amount)}
-                              {!hasPaid && <span className="text-xs ml-1">(Pendiente)</span>}
+                              <span className="font-semibold text-[9px] whitespace-nowrap">
+                                {formatMXN(payment.amount).replace('MXN', '').replace('$', '$')}
+                              </span>
                             </div>
                           </div>
                         )
                       })}
                       
-                      {/* Pagos realizados */}
+                      {/* Pagos realizados - formato compacto */}
                       {paidPayments.map((payment) => {
                         const paymentId = payment.id
                         return (
                           <div
                             key={`paid-${paymentId}`}
-                            className={`p-1.5 rounded border text-xs group ${
+                            className={`px-1 py-0.5 rounded text-[10px] group cursor-pointer ${
                               payment.isOnTime 
-                                ? 'bg-green-100 border-green-300' 
-                                : 'bg-red-100 border-red-300'
+                                ? 'bg-green-200 text-green-900' 
+                                : 'bg-red-200 text-red-900'
                             }`}
+                            title={`${payment.projectName}: ${formatMXN(payment.amount)}${!payment.isOnTime ? ` (${payment.daysDelay} días tarde)` : ''}`}
+                            onClick={() => handleEditPayment(payment)}
                           >
-                            <div className="flex items-center justify-between mb-1">
-                              <div className="flex items-center space-x-1 flex-1">
+                            <div className="flex items-center justify-between gap-1">
+                              <div className="flex items-center gap-0.5 min-w-0">
                                 {payment.isOnTime ? (
-                                  <CheckCircle className="h-3 w-3 text-green-600" />
+                                  <CheckCircle className="h-2.5 w-2.5 text-green-700 flex-shrink-0" />
                                 ) : (
-                                  <AlertCircle className="h-3 w-3 text-red-600" />
+                                  <AlertCircle className="h-2.5 w-2.5 text-red-700 flex-shrink-0" />
                                 )}
-                                <span className={`font-medium truncate ${payment.isOnTime ? 'text-green-800' : 'text-red-800'}`}>
-                                  {payment.projectName} {payment.isOnTime ? '(A tiempo)' : `(${payment.daysDelay || 0} días tarde)`}
+                                <span className="font-medium truncate max-w-[50px]">
+                                  {payment.projectName}
                                 </span>
+                                {!payment.isOnTime && payment.daysDelay > 0 && (
+                                  <span className="text-[8px] text-red-700">({payment.daysDelay}d)</span>
+                                )}
                               </div>
-                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-4 w-4 p-0"
-                                  onClick={() => handleEditPayment(payment)}
-                                  title="Editar pago"
-                                >
-                                  <Edit className="h-3 w-3" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-4 w-4 p-0 text-red-600 hover:text-red-700"
-                                  onClick={() => handleDeletePayment(paymentId)}
-                                  title="Eliminar pago"
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            </div>
-                            <div className={`font-semibold ${payment.isOnTime ? 'text-green-700' : 'text-red-700'}`}>
-                              {formatMXN(payment.amount)}
+                              <span className="font-semibold text-[9px] whitespace-nowrap">
+                                {formatMXN(payment.amount).replace('MXN', '').replace('$', '$')}
+                              </span>
                             </div>
                           </div>
                         )
@@ -718,7 +826,71 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
 
         {/* Tabla de resumen de pagos del mes */}
         <div className="bg-white rounded-lg shadow-sm border p-6 mt-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Resumen de Pagos del Mes</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Resumen de Pagos del Mes</h3>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-gray-600">Mes:</label>
+                <Select value={summaryMonthFilter} onValueChange={setSummaryMonthFilter}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {getMonthOptions().map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-gray-600">Estado:</label>
+                <Select value={summaryStatusFilter} onValueChange={setSummaryStatusFilter}>
+                  <SelectTrigger className="w-36">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="paid">Pagados</SelectItem>
+                    <SelectItem value="pending">Pendientes</SelectItem>
+                    <SelectItem value="partial">Parciales</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          
+          {/* Resumen de totales */}
+          <div className="grid grid-cols-4 gap-4 mb-4">
+            <div className="p-3 rounded-lg bg-blue-50 border border-blue-200">
+              <div className="text-xs text-gray-600">Total Esperado</div>
+              <div className="text-lg font-bold text-blue-700">
+                {formatMXN(monthlyPaymentSummary.reduce((sum, item) => sum + item.expectedAmount, 0))}
+              </div>
+            </div>
+            <div className="p-3 rounded-lg bg-green-50 border border-green-200">
+              <div className="text-xs text-gray-600">Total Recibido</div>
+              <div className="text-lg font-bold text-green-700">
+                {formatMXN(monthlyPaymentSummary.reduce((sum, item) => sum + item.paidAmount, 0))}
+              </div>
+            </div>
+            <div className="p-3 rounded-lg bg-yellow-50 border border-yellow-200">
+              <div className="text-xs text-gray-600">Pendiente</div>
+              <div className="text-lg font-bold text-yellow-700">
+                {formatMXN(monthlyPaymentSummary.reduce((sum, item) => sum + (item.expectedAmount - item.paidAmount), 0))}
+              </div>
+            </div>
+            <div className="p-3 rounded-lg bg-purple-50 border border-purple-200">
+              <div className="text-xs text-gray-600">% Cobrado</div>
+              <div className="text-lg font-bold text-purple-700">
+                {(() => {
+                  const totalExpected = monthlyPaymentSummary.reduce((sum, item) => sum + item.expectedAmount, 0)
+                  const totalPaid = monthlyPaymentSummary.reduce((sum, item) => sum + item.paidAmount, 0)
+                  return totalExpected > 0 ? `${((totalPaid / totalExpected) * 100).toFixed(1)}%` : '0%'
+                })()}
+              </div>
+            </div>
+          </div>
+          
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -752,7 +924,7 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
                       <td className="py-2 px-3 text-center">
                         {item.isPaid ? (
                           <Badge className={item.isOnTime ? 'bg-green-100 text-green-700 border-green-300' : 'bg-red-100 text-red-700 border-red-300'}>
-                            {item.isOnTime ? 'A tiempo' : `${item.daysDelay} días retraso`}
+                            {item.isOnTime ? 'A tiempo' : `${item.daysDelay} días atraso`}
                           </Badge>
                         ) : (
                           <Badge className="bg-gray-100 text-gray-600 border-gray-300">Pendiente</Badge>

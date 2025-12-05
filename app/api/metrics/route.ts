@@ -5,6 +5,35 @@ function isValidMonth(m?: string | null) {
   return /^\d{4}-\d{2}$/.test(m)
 }
 
+// Helper para determinar si un cliente estaba activo en un mes específico
+// Lógica simple: si está pausado desde mes X, NO cuenta desde ese mes en adelante
+function isClientActiveInMonth(project: any, monthStr: string): boolean {
+  // monthStr en formato "YYYY-MM"
+  
+  // Si el cliente está completado, no está activo
+  if (project.status === 'completed') return false
+  
+  // Si el cliente está activo, cuenta siempre
+  if (project.status === 'active') return true
+  
+  // Cliente pausado - verificar desde qué mes está pausado
+  if (project.status === 'paused') {
+    const pausedAt = project.paused_at // YYYY-MM-DD (guardamos como primer día del mes)
+    
+    // Si no tiene fecha de pausa específica, no cuenta
+    if (!pausedAt) return false
+    
+    // Extraer el mes de pausa (YYYY-MM)
+    const pausedMonth = pausedAt.substring(0, 7) // "2025-02-01" -> "2025-02"
+    
+    // Si el mes consultado es ANTERIOR al mes de pausa, el cliente estaba activo
+    // Si el mes es IGUAL o POSTERIOR al mes de pausa, ya no está activo
+    return monthStr < pausedMonth
+  }
+  
+  return false
+}
+
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
@@ -206,9 +235,9 @@ export async function GET(request: NextRequest) {
     const revenueProject = new Map<string, number>()
     for (const b of billings) {
       if (b.project_id) {
-        // Solo incluir clientes activos en los ingresos esperados
+        // Solo incluir clientes activos EN ESTE MES en los ingresos esperados
         const project = projects.find((p: any) => p.id === b.project_id)
-        if (project?.status !== 'active') continue
+        if (!project || !isClientActiveInMonth(project, m)) continue
         const pid = b.project_id
         revenueProject.set(pid, (revenueProject.get(pid) || 0) + Number(b.monthly_amount || 0))
       }
@@ -284,7 +313,11 @@ export async function GET(request: NextRequest) {
     const projectsById = new Map(projects.map((p:any)=> [p.id, p]))
     const clients: any[] = []
     // Construir métricas por cliente basadas en objetivos (monthly_*) y promedios bestEmpForType
+    // Solo procesar clientes ACTIVOS EN ESTE MES
     for (const p of projects) {
+      // Filtrar solo clientes activos en el mes consultado
+      if (!isClientActiveInMonth(p, m)) continue
+      
       const pid = p.id
       const revenue = revenueProject.get(pid) || 0
       // Objetivos específicos por tipo de trabajo

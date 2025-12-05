@@ -8,26 +8,110 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { useUsers, useProjects } from '@/lib/hooks/useApiCache'
-import { Edit, Trash2 } from 'lucide-react'
+import { Edit, Trash2, RefreshCw, Plus, X } from 'lucide-react'
+
+// Helper para determinar si un cliente estaba activo en un mes específico
+// Lógica simple: si está pausado desde mes X, NO cuenta desde ese mes en adelante
+function isClientActiveInMonth(project: any, monthStr: string): boolean {
+  if (!project) return false
+  
+  // Si el cliente está completado, no está activo
+  if (project.status === 'completed') return false
+  
+  // Si el cliente está activo, cuenta siempre
+  if (project.status === 'active') return true
+  
+  // Cliente pausado - verificar desde qué mes está pausado
+  if (project.status === 'paused') {
+    const pausedAt = project.paused_at // YYYY-MM-DD
+    
+    // Si no tiene fecha de pausa específica, no cuenta
+    if (!pausedAt) return false
+    
+    // Extraer el mes de pausa (YYYY-MM)
+    const pausedMonth = pausedAt.substring(0, 7) // "2025-02-01" -> "2025-02"
+    
+    // Si el mes consultado es ANTERIOR al mes de pausa, el cliente estaba activo
+    // Si el mes es IGUAL o POSTERIOR al mes de pausa, ya no está activo
+    return monthStr < pausedMonth
+  }
+  
+  return false
+}
 
 export default function FinancePage({ params }: { params: { id: string } }) {
   const { user, loading } = useAuth()
   const router = useRouter()
-  const { data: usersData } = useUsers()
-  const { data: projectsData } = useProjects(params.id)
+  const { data: usersData, refetch: refetchUsers } = useUsers()
+  const { data: projectsData, refetch: refetchProjects } = useProjects(params.id)
 
-  const isAdmin = useMemo(() => {
-    const name = (user?.name || '').toLowerCase()
-    return name === 'miguel' || name === 'raul'
-  }, [user])
+  // Function to create new user and assign salary
+  const createUserAndSalary = async () => {
+    if (!newUserForm.name || !newUserForm.monthly_salary) {
+      alert('Por favor completa nombre y sueldo mensual')
+      return
+    }
+
+    try {
+      // Generate a placeholder email (employees won't access the system)
+      const placeholderEmail = `${newUserForm.name.toLowerCase().replace(/\s+/g, '.')}@saintagency.com.mx`
+      
+      // Create user
+      const userRes = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newUserForm.name,
+          email: placeholderEmail,
+          password: newUserForm.password || 'password123',
+          role: 'member',
+          avatar: '👨‍💼'
+        })
+      })
+
+      if (!userRes.ok) {
+        const error = await userRes.json()
+        throw new Error(error.error || 'Error al crear usuario')
+      }
+
+      const newUser = await userRes.json()
+
+      // Assign salary to the new user
+      const salaryRes = await fetch('/api/finance/salaries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          current_user: currentUserName,
+          workspace_id: params.id,
+          user_id: newUser.id,
+          monthly_salary: Number(newUserForm.monthly_salary),
+          notes: newUserForm.notes
+        })
+      })
+
+      if (!salaryRes.ok) {
+        const error = await salaryRes.json()
+        throw new Error(error.error || 'Error al asignar sueldo')
+      }
+
+      // Refresh data
+      await refetchUsers()
+      await loadData()
+      
+      // Reset form
+      setNewUserForm({ name: '', password: '', monthly_salary: '', notes: '' })
+      setShowCreateUser(false)
+      
+      alert(`✅ Empleado "${newUserForm.name}" creado y sueldo asignado exitosamente!`)
+    } catch (error: any) {
+      console.error('Error creating user:', error)
+      alert(`Error: ${error.message || 'Error desconocido'}`)
+    }
+  }
 
   useEffect(() => {
     if (!loading && !user) router.push('/sign-in')
   }, [user, loading, router])
-
-  useEffect(() => {
-    if (!loading && user && !isAdmin) router.push(`/workspaces/${params.id}/dashboard`)
-  }, [loading, user, isAdmin, params.id, router])
 
   const users = usersData ?? []
   const projects = projectsData ?? []
@@ -57,6 +141,9 @@ export default function FinancePage({ params }: { params: { id: string } }) {
   const [editingExpense, setEditingExpense] = useState<any | null>(null)
   const [editingIncome, setEditingIncome] = useState<any | null>(null)
   const [editingBilling, setEditingBilling] = useState<any | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [showCreateUser, setShowCreateUser] = useState(false)
+  const [newUserForm, setNewUserForm] = useState({ name: '', password: '', monthly_salary: '', notes: '' })
   
   // Filtro de fechas para gastos - con selects de año y mes
   const now = new Date()
@@ -96,10 +183,11 @@ export default function FinancePage({ params }: { params: { id: string } }) {
     const safeExpenses = Array.isArray(expenses) ? expenses : []
     const safeSalaries = Array.isArray(salaries) ? salaries : []
     
-    // Ingresos esperados (facturación mensual de clientes ACTIVOS solamente)
+    // Ingresos esperados (facturación mensual de clientes ACTIVOS EN EL MES ACTUAL)
+    const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
     const ingresosEsperados = safeBillings.reduce((sum: number, b: any) => {
       const project = projects.find((p: any) => p.id === b.project_id)
-      if (project?.status !== 'active') return sum
+      if (!isClientActiveInMonth(project, currentMonth)) return sum
       return sum + (Number(b.monthly_amount) || 0)
     }, 0)
     
@@ -177,26 +265,41 @@ export default function FinancePage({ params }: { params: { id: string } }) {
     }
   }, [billings, incomes, expenses, salaries])
 
-  // Load data
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [sal, bil, wl, exp, inc] = await Promise.all([
-          fetch(`/api/finance/salaries?workspaceId=${params.id}`).then(async r => (r.ok ? r.json() : [])),
-          fetch(`/api/finance/client-billing?workspaceId=${params.id}`).then(async r => (r.ok ? r.json() : [])),
-          fetch(`/api/finance/worklogs?workspaceId=${params.id}`).then(async r => (r.ok ? r.json() : [])),
-          fetch(`/api/finance/expenses?workspaceId=${params.id}`).then(async r => (r.ok ? r.json() : [])),
-          fetch(`/api/finance/incomes?workspaceId=${params.id}`).then(async r => (r.ok ? r.json() : []))
-        ])
-        setSalaries(Array.isArray(sal) ? sal : [])
-        setBillings(Array.isArray(bil) ? bil : [])
-        setWorklogs(Array.isArray(wl) ? wl : [])
-        setExpenses(Array.isArray(exp) ? exp : [])
-        setIncomes(Array.isArray(inc) ? inc : [])
-      } catch {}
+  // Load data function
+  const loadData = useCallback(async () => {
+    try {
+      setIsRefreshing(true)
+      // Invalidate cache to force fresh data
+      const cacheBuster = `?workspaceId=${params.id}&_t=${Date.now()}`
+      const [sal, bil, wl, exp, inc] = await Promise.all([
+        fetch(`/api/finance/salaries${cacheBuster}`).then(async r => (r.ok ? r.json() : [])),
+        fetch(`/api/finance/client-billing${cacheBuster}`).then(async r => (r.ok ? r.json() : [])),
+        fetch(`/api/finance/worklogs${cacheBuster}`).then(async r => (r.ok ? r.json() : [])),
+        fetch(`/api/finance/expenses${cacheBuster}`).then(async r => (r.ok ? r.json() : [])),
+        fetch(`/api/finance/incomes${cacheBuster}`).then(async r => (r.ok ? r.json() : []))
+      ])
+      setSalaries(Array.isArray(sal) ? sal : [])
+      setBillings(Array.isArray(bil) ? bil : [])
+      setWorklogs(Array.isArray(wl) ? wl : [])
+      setExpenses(Array.isArray(exp) ? exp : [])
+      setIncomes(Array.isArray(inc) ? inc : [])
+      // Also refresh projects and users data
+      await Promise.all([
+        refetchProjects(),
+        refetchUsers()
+      ])
+    } catch (error) {
+      console.error('Error loading finance data:', error)
+      alert('Error al actualizar los datos. Intenta de nuevo.')
+    } finally {
+      setIsRefreshing(false)
     }
-    if (isAdmin) load()
-  }, [params.id, isAdmin])
+  }, [params.id, refetchProjects, refetchUsers])
+
+  // Load data on mount
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   const currentUserName = (user?.name || '')
 
@@ -586,11 +689,10 @@ export default function FinancePage({ params }: { params: { id: string } }) {
       }
     })
     
-    // Ordenar meses (más recientes primero) y filtrar solo los que tienen gastos o están en el rango
+    // Ordenar meses (más antiguos primero) y filtrar solo los que tienen gastos o están en el rango
     const sortedMonths = Array.from(expensesMap.keys())
       .filter(monthKey => monthsInRange.includes(monthKey))
       .sort()
-      .reverse()
     
     return sortedMonths.map(monthKey => {
       const monthExpenses = expensesMap.get(monthKey) || []
@@ -633,7 +735,7 @@ export default function FinancePage({ params }: { params: { id: string } }) {
     return currentSalaries.reduce((sum, s) => sum + (Number(s.monthly_salary) || 0), 0)
   }, [currentSalaries])
 
-  if (!user || !isAdmin) return null
+  if (!user) return null
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -641,10 +743,18 @@ export default function FinancePage({ params }: { params: { id: string } }) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div>
-              <h1 className="text-xl font-semibold text-gray-900">Finanzas (solo admins)</h1>
+              <h1 className="text-xl font-semibold text-gray-900">Finanzas</h1>
               <p className="text-sm text-gray-600">Gestión de sueldos, facturación de clientes y tiempos</p>
             </div>
             <div className="flex items-center space-x-2">
+              <Button
+                variant="outline"
+                onClick={loadData}
+                disabled={isRefreshing}
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+                {isRefreshing ? 'Actualizando...' : 'Actualizar'}
+              </Button>
               <Button
                 variant="outline"
                 onClick={() => router.push(`/workspaces/${params.id}/finance/metrics`)}
@@ -661,13 +771,101 @@ export default function FinancePage({ params }: { params: { id: string } }) {
         <section className="bg-white rounded-lg shadow-sm border p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900">Sueldos por empleado</h2>
-            <div className="bg-green-50 px-4 py-2 rounded-lg border border-green-200">
-              <div className="text-xs text-gray-600 mb-1">Gasto de Nómina Mensual Total</div>
-              <div className="text-xl font-bold text-green-700">
-                {totalMonthlyPayroll.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+            <div className="flex items-center gap-3">
+              <div className="bg-green-50 px-4 py-2 rounded-lg border border-green-200">
+                <div className="text-xs text-gray-600 mb-1">Gasto de Nómina Mensual Total</div>
+                <div className="text-xl font-bold text-green-700">
+                  {totalMonthlyPayroll.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+                </div>
               </div>
+              <Button
+                variant="outline"
+                onClick={() => setShowCreateUser(true)}
+                className="flex items-center gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                Nuevo Empleado
+              </Button>
             </div>
           </div>
+
+          {/* Modal para crear nuevo empleado */}
+          {showCreateUser && (
+            <div 
+              className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+              onClick={(e) => e.target === e.currentTarget && setShowCreateUser(false)}
+            >
+              <div className="bg-white rounded-lg shadow-xl max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+                <div className="p-4 border-b flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-gray-900">Crear Nuevo Empleado</h3>
+                  <Button variant="ghost" size="sm" onClick={() => setShowCreateUser(false)}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="p-4 space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+                    <Input
+                      value={newUserForm.name}
+                      onChange={(e) => setNewUserForm({ ...newUserForm, name: e.target.value })}
+                      placeholder="Ej: Juan Pérez"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña (opcional)</label>
+                    <Input
+                      type="password"
+                      value={newUserForm.password}
+                      onChange={(e) => setNewUserForm({ ...newUserForm, password: e.target.value })}
+                      placeholder="Dejar vacío para usar 'password123'"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Sueldo mensual (MXN)</label>
+                    <Input
+                      type="number"
+                      value={newUserForm.monthly_salary}
+                      onChange={(e) => setNewUserForm({ ...newUserForm, monthly_salary: e.target.value })}
+                      placeholder="15000"
+                      min="0"
+                      step="0.01"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Notas (opcional)</label>
+                    <Input
+                      value={newUserForm.notes}
+                      onChange={(e) => setNewUserForm({ ...newUserForm, notes: e.target.value })}
+                      placeholder="Notas sobre el sueldo"
+                    />
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setShowCreateUser(false)
+                        setNewUserForm({ name: '', password: '', monthly_salary: '', notes: '' })
+                      }}
+                      className="flex-1"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      onClick={createUserAndSalary}
+                      disabled={!newUserForm.name || !newUserForm.monthly_salary}
+                      className="flex-1"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Crear y Asignar Sueldo
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
             <div className="md:col-span-2">
               <label className="block text-sm mb-1">Empleado</label>

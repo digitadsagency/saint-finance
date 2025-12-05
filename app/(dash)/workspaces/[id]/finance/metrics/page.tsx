@@ -23,18 +23,9 @@ export default function FinanceMetricsPage({ params }: { params: { id: string } 
   const [loadingMetrics, setLoadingMetrics] = useState(false)
   const [monthlyUtilidad, setMonthlyUtilidad] = useState<any[]>([])
   const [loadingMonthly, setLoadingMonthly] = useState(false)
-  const isAdmin = useMemo(() => {
-    const name = (user?.name || '').toLowerCase()
-    return name === 'miguel' || name === 'raul'
-  }, [user])
-
   useEffect(() => {
     if (!loading && !user) router.push('/sign-in')
   }, [user, loading, router])
-
-  useEffect(() => {
-    if (!loading && user && !isAdmin) router.push(`/workspaces/${params.id}/dashboard`)
-  }, [loading, user, isAdmin, params.id, router])
 
   const fetchMetrics = useCallback(async (m: string) => {
     setLoadingMetrics(true)
@@ -72,7 +63,7 @@ export default function FinanceMetricsPage({ params }: { params: { id: string } 
     }
   }, [params.id])
 
-  useEffect(() => { if (isAdmin) fetchMetrics(month) }, [isAdmin, month, fetchMetrics])
+  useEffect(() => { fetchMetrics(month) }, [month, fetchMetrics])
 
   const fetchMonthlyUtilidad = useCallback(async () => {
     setLoadingMonthly(true)
@@ -93,9 +84,9 @@ export default function FinanceMetricsPage({ params }: { params: { id: string } 
     }
   }, [params.id])
 
-  useEffect(() => { if (isAdmin) fetchMonthlyUtilidad() }, [isAdmin, fetchMonthlyUtilidad])
+  useEffect(() => { fetchMonthlyUtilidad() }, [fetchMonthlyUtilidad])
 
-  if (!user || !isAdmin) return null
+  if (!user) return null
 
   if (loadingMetrics && !metrics) {
     return (
@@ -112,7 +103,7 @@ export default function FinanceMetricsPage({ params }: { params: { id: string } 
           <div className="flex items-center justify-between h-16">
             <div>
               <h1 className="text-xl font-semibold text-gray-900">Métricas Financieras</h1>
-              <p className="text-sm text-gray-600">Solo visible para administradores</p>
+              <p className="text-sm text-gray-600">Análisis financiero detallado</p>
             </div>
             <div className="flex items-center space-x-2">
               <input

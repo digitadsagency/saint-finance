@@ -3,7 +3,6 @@ import { cache, getCacheKey } from '@/lib/cache'
 
 interface WorkspaceData {
   users: any[]
-  tasks: any[]
   projects: any[]
   loading: boolean
   error: string | null
@@ -12,7 +11,6 @@ interface WorkspaceData {
 
 export function useWorkspaceData(workspaceId: string): WorkspaceData {
   const [users, setUsers] = useState<any[]>([])
-  const [tasks, setTasks] = useState<any[]>([])
   const [projects, setProjects] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -24,11 +22,9 @@ export function useWorkspaceData(workspaceId: string): WorkspaceData {
 
       // Check cache first
       const usersCacheKey = getCacheKey.workspaces()
-      const tasksCacheKey = getCacheKey.tasks(workspaceId)
       const projectsCacheKey = getCacheKey.projects(workspaceId)
 
       const cachedUsers = cache.get(usersCacheKey)
-      const cachedTasks = cache.get(tasksCacheKey)
       const cachedProjects = cache.get(projectsCacheKey)
 
       // Load data in parallel
@@ -43,17 +39,6 @@ export function useWorkspaceData(workspaceId: string): WorkspaceData {
         )
       } else {
         promises.push(Promise.resolve({ type: 'users', data: cachedUsers }))
-      }
-
-      if (!cachedTasks) {
-        promises.push(
-          fetch(`/api/tasks?workspaceId=${workspaceId}`).then(res => res.json()).then(data => {
-            cache.set(tasksCacheKey, data, 2 * 60 * 1000) // 2 minutes
-            return { type: 'tasks', data }
-          })
-        )
-      } else {
-        promises.push(Promise.resolve({ type: 'tasks', data: cachedTasks }))
       }
 
       if (!cachedProjects) {
@@ -73,9 +58,6 @@ export function useWorkspaceData(workspaceId: string): WorkspaceData {
         switch (result.type) {
           case 'users':
             setUsers(result.data)
-            break
-          case 'tasks':
-            setTasks(result.data)
             break
           case 'projects':
             setProjects(result.data)
@@ -106,7 +88,6 @@ export function useWorkspaceData(workspaceId: string): WorkspaceData {
 
   return {
     users,
-    tasks,
     projects,
     loading,
     error,

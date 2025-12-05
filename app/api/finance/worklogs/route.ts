@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { FinanceService } from '@/lib/services/finance'
 
-function isAdminUser(userNameOrUsername?: string) {
-  const v = (userNameOrUsername || '').toLowerCase()
-  return v === 'miguel' || v === 'raul'
-}
-
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -20,9 +15,6 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    if (!isAdminUser(body.current_user)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
 
     const record = await FinanceService.createWorklog({
       workspace_id: body.workspace_id,

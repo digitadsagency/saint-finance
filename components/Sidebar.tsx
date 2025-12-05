@@ -6,9 +6,6 @@ import Link from 'next/link'
 import { 
   LayoutDashboard,
   Calendar,
-  CalendarDays,
-  User,
-  List,
   BarChart3,
   FolderOpen,
   Users,
@@ -16,9 +13,6 @@ import {
   LogOut,
   Menu,
   X,
-  ChevronRight,
-  ChevronDown,
-  CheckSquare,
   FileText
 } from 'lucide-react'
 import { useAuth } from '@/lib/useAuth'
@@ -60,21 +54,6 @@ export function Sidebar({ workspaceId }: SidebarProps) {
       path: `/workspaces/${workspaceId}/dashboard`
     },
     {
-      icon: List,
-      label: 'Lista ClickUp',
-      path: `/workspaces/${workspaceId}/all-tasks-list`
-    },
-    {
-      icon: CalendarDays,
-      label: 'Calendario',
-      path: `/workspaces/${workspaceId}/calendar`
-    },
-    {
-      icon: BarChart3,
-      label: 'Rendimiento',
-      path: `/workspaces/${workspaceId}/performance`
-    },
-    {
       icon: FileText,
       label: 'Logs Diarios',
       path: `/workspaces/${workspaceId}/daily-logs`
@@ -86,16 +65,6 @@ export function Sidebar({ workspaceId }: SidebarProps) {
       icon: FolderOpen,
       label: 'Clientes',
       path: `/workspaces/${workspaceId}/clients`
-    },
-    {
-      icon: Users,
-      label: 'Miembros',
-      path: `#`
-    },
-    {
-      icon: Settings,
-      label: 'Configuración',
-      path: `#`
     }
   ]
 
@@ -103,8 +72,6 @@ export function Sidebar({ workspaceId }: SidebarProps) {
     logout()
     router.push('/sign-in')
   }
-
-  const isAdmin = (user?.name || '').toLowerCase() === 'miguel' || (user?.name || '').toLowerCase() === 'raul'
 
   return (
     <div className={cn(
@@ -190,49 +157,45 @@ export function Sidebar({ workspaceId }: SidebarProps) {
               </Link>
             )
           })}
-          {isAdmin && (
-            <>
-              <Link
-                href={`/workspaces/${workspaceId}/finance`}
-                className={cn(
-                  "flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors group",
-                  isActive(`/workspaces/${workspaceId}/finance`)
-                    ? "bg-blue-50 text-blue-700 font-medium"
-                    : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
-                )}
-                title={isCollapsed ? 'Finanzas' : undefined}
-              >
-                <BarChart3 className="h-5 w-5 flex-shrink-0 text-gray-500 group-hover:text-gray-700" />
-                {!isCollapsed && <span className="text-sm">Finanzas</span>}
-              </Link>
-              <Link
-                href={`/workspaces/${workspaceId}/finance/metrics`}
-                className={cn(
-                  "flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors group",
-                  isActive(`/workspaces/${workspaceId}/finance/metrics`)
-                    ? "bg-blue-50 text-blue-700 font-medium"
-                    : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
-                )}
-                title={isCollapsed ? 'Métricas' : undefined}
-              >
-                <BarChart3 className="h-5 w-5 flex-shrink-0 text-gray-500 group-hover:text-gray-700" />
-                {!isCollapsed && <span className="text-sm">Métricas</span>}
-              </Link>
-              <Link
-                href={`/workspaces/${workspaceId}/finance/payments-calendar`}
-                className={cn(
-                  "flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors group",
-                  isActive(`/workspaces/${workspaceId}/finance/payments-calendar`)
-                    ? "bg-blue-50 text-blue-700 font-medium"
-                    : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
-                )}
-                title={isCollapsed ? 'Calendario de Pagos' : undefined}
-              >
-                <Calendar className="h-5 w-5 flex-shrink-0 text-gray-500 group-hover:text-gray-700" />
-                {!isCollapsed && <span className="text-sm">Calendario de Pagos</span>}
-              </Link>
-            </>
-          )}
+          <Link
+            href={`/workspaces/${workspaceId}/finance`}
+            className={cn(
+              "flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors group",
+              isActive(`/workspaces/${workspaceId}/finance`)
+                ? "bg-blue-50 text-blue-700 font-medium"
+                : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+            )}
+            title={isCollapsed ? 'Finanzas' : undefined}
+          >
+            <BarChart3 className="h-5 w-5 flex-shrink-0 text-gray-500 group-hover:text-gray-700" />
+            {!isCollapsed && <span className="text-sm">Finanzas</span>}
+          </Link>
+          <Link
+            href={`/workspaces/${workspaceId}/finance/metrics`}
+            className={cn(
+              "flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors group",
+              isActive(`/workspaces/${workspaceId}/finance/metrics`)
+                ? "bg-blue-50 text-blue-700 font-medium"
+                : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+            )}
+            title={isCollapsed ? 'Métricas' : undefined}
+          >
+            <BarChart3 className="h-5 w-5 flex-shrink-0 text-gray-500 group-hover:text-gray-700" />
+            {!isCollapsed && <span className="text-sm">Métricas</span>}
+          </Link>
+          <Link
+            href={`/workspaces/${workspaceId}/finance/payments-calendar`}
+            className={cn(
+              "flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors group",
+              isActive(`/workspaces/${workspaceId}/finance/payments-calendar`)
+                ? "bg-blue-50 text-blue-700 font-medium"
+                : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+            )}
+            title={isCollapsed ? 'Calendario de Pagos' : undefined}
+          >
+            <Calendar className="h-5 w-5 flex-shrink-0 text-gray-500 group-hover:text-gray-700" />
+            {!isCollapsed && <span className="text-sm">Calendario de Pagos</span>}
+          </Link>
         </div>
       </div>
 

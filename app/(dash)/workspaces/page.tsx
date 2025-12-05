@@ -61,7 +61,7 @@ export default function WorkspacesPage() {
             Mis Workspaces
           </h2>
           <p className="text-gray-600">
-            Gestiona tus proyectos y tareas desde aquí
+            Gestiona tus proyectos y finanzas desde aquí
           </p>
         </div>
 
@@ -88,22 +88,6 @@ export default function WorkspacesPage() {
                 size="sm"
               >
                 Abrir
-              </Button>
-            </div>
-          </div>
-
-          {/* Create New Workspace */}
-          <div className="bg-white rounded-lg border-2 border-dashed border-gray-300 p-6 hover:border-blue-400 transition-colors">
-            <div className="text-center">
-              <Plus className="h-8 w-8 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Crear Workspace
-              </h3>
-              <p className="text-gray-600 text-sm mb-4">
-                Crea un nuevo workspace para tu equipo
-              </p>
-              <Button variant="outline" size="sm">
-                Crear
               </Button>
             </div>
           </div>

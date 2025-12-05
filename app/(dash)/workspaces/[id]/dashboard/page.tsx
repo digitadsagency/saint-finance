@@ -4,12 +4,10 @@ import { useAuth } from '@/lib/useAuth'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState, useMemo } from 'react'
 import { useWorkspaceData } from '@/lib/hooks/useWorkspaceData'
-import { parseLocalDateFromYMD } from '@/lib/time'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { StatsCard } from '@/components/StatsCard'
 import { DashboardQuickActions } from '@/components/DashboardQuickActions'
-import { InteractiveModal } from '@/components/InteractiveModal'
 import { ClientCreationModal } from '@/components/ProjectCreationModal'
 import {
   Plus,
@@ -20,9 +18,6 @@ import {
   AlertCircle,
   Calendar,
   BarChart3,
-  CalendarDays,
-  User,
-  List,
   DollarSign,
   Bell
 } from 'lucide-react'
@@ -30,27 +25,19 @@ import {
 export default function WorkspaceDashboard({ params }: { params: { id: string } }) {
   const { user, loading } = useAuth()
   const router = useRouter()
-  const [activeModal, setActiveModal] = useState<string | null>(null)
   const [showClientCreation, setShowClientCreation] = useState(false)
   const [billings, setBillings] = useState<any[]>([])
   
   // Use optimized hook for data loading
-  const { users, tasks, projects: clients, loading: loadingData, refetch } = useWorkspaceData(params.id)
+  const { users, projects: clients, loading: loadingData, refetch } = useWorkspaceData(params.id)
   
-  const isAdmin = useMemo(() => {
-    const name = (user?.name || '').toLowerCase()
-    return name === 'miguel' || name === 'raul'
-  }, [user])
-  
-  // Load billings for admin users
+  // Load billings for all users
   useEffect(() => {
-    if (isAdmin) {
-      fetch(`/api/finance/client-billing?workspaceId=${params.id}`)
-        .then(res => res.ok ? res.json() : [])
-        .then(data => setBillings(Array.isArray(data) ? data : []))
-        .catch(() => setBillings([]))
-    }
-  }, [isAdmin, params.id])
+    fetch(`/api/finance/client-billing?workspaceId=${params.id}`)
+      .then(res => res.ok ? res.json() : [])
+      .then(data => setBillings(Array.isArray(data) ? data : []))
+      .catch(() => setBillings([]))
+  }, [params.id])
 
   useEffect(() => {
     if (!loading && !user) {
@@ -60,24 +47,13 @@ export default function WorkspaceDashboard({ params }: { params: { id: string } 
 
   // Calculate stats from real data with memoization - MUST be before any conditional returns
   const stats = useMemo(() => {
-    const now = new Date()
-    const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
-    
     return {
       totalClients: clients.length,
-      totalTasks: tasks.length,
-      completedTasks: tasks.filter(task => task.status === 'done').length,
-      overdueTasks: tasks.filter(task => {
-        if (!task.due_date || task.status === 'done') return false
-        return parseLocalDateFromYMD(task.due_date) < now
-      }).length,
-      thisWeekTasks: tasks.filter(task => {
-        if (!task.due_date) return false
-        const dueDate = parseLocalDateFromYMD(task.due_date)
-        return dueDate >= now && dueDate <= weekFromNow
-      }).length
+      activeClients: clients.filter((c: any) => c.status === 'active').length,
+      pausedClients: clients.filter((c: any) => c.status === 'paused').length,
+      completedClients: clients.filter((c: any) => c.status === 'completed').length
     }
-  }, [clients.length, tasks])
+  }, [clients.length, clients])
 
   const handleClientCreated = async (newClient: any) => {
     console.log('🔄 Client created, refreshing data...')
@@ -98,29 +74,6 @@ export default function WorkspaceDashboard({ params }: { params: { id: string } 
     return null
   }
 
-  // Use real data instead of mock data
-  const recentTasks = tasks.slice(0, 3) // Show first 3 tasks
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'urgent': return 'priority-urgent'
-      case 'high': return 'priority-high'
-      case 'med': return 'priority-med'
-      case 'low': return 'priority-low'
-      default: return 'priority-low'
-    }
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'done': return 'status-done'
-      case 'inprogress': return 'status-inprogress'
-      case 'todo': return 'status-todo'
-      case 'review': return 'status-review'
-      case 'backlog': return 'status-backlog'
-      default: return 'status-backlog'
-    }
-  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -157,37 +110,35 @@ export default function WorkspaceDashboard({ params }: { params: { id: string } 
           />
           
           <StatsCard
-            title="Total de Tareas"
-            value={stats.totalTasks}
+            title="Clientes Activos"
+            value={stats.activeClients}
             icon={CheckSquare}
             color="green"
-            description={`${stats.completedTasks} completadas`}
+            description={`${stats.activeClients} en curso`}
             trend={{ value: 8, isPositive: true }}
           />
           
           <StatsCard
-            title="Esta Semana"
-            value={stats.thisWeekTasks}
+            title="Clientes Pausados"
+            value={stats.pausedClients}
             icon={Clock}
             color="yellow"
-            description="Tareas pendientes"
+            description="Temporalmente pausados"
           />
           
           <StatsCard
-            title="Tareas Vencidas"
-            value={stats.overdueTasks}
+            title="Clientes Completados"
+            value={stats.completedClients}
             icon={AlertCircle}
-            color="red"
-            description="Requieren atención"
+            color="blue"
+            description="Proyectos finalizados"
             trend={{ value: -5, isPositive: true }}
           />
         </div>
 
 
-        {/* Payment Reminders - Solo para Miguel y Raúl */}
-        {isAdmin && (
-          <PaymentReminders billings={billings} clients={clients} workspaceId={params.id} router={router} />
-        )}
+        {/* Payment Reminders */}
+        <PaymentReminders billings={billings} clients={clients} workspaceId={params.id} router={router} />
 
         {/* Quick Actions */}
         <div className="mb-8">
@@ -197,20 +148,16 @@ export default function WorkspaceDashboard({ params }: { params: { id: string } 
               setShowClientCreation(true)
             }}
             onViewAllProjects={() => {
-              console.log('Viewing all projects...')
-              setActiveModal('project')
+              router.push(`/workspaces/${params.id}/clients`)
             }}
-            onManageMembers={() => {
-              console.log('Managing members...')
-              setActiveModal('members')
+            onFinance={() => {
+              router.push(`/workspaces/${params.id}/finance`)
             }}
-            onViewReports={() => {
-              console.log('Viewing reports...')
-              setActiveModal('reports')
+            onMetrics={() => {
+              router.push(`/workspaces/${params.id}/finance/metrics`)
             }}
-            onSettings={() => {
-              console.log('Opening settings...')
-              setActiveModal('settings')
+            onPaymentsCalendar={() => {
+              router.push(`/workspaces/${params.id}/finance/payments-calendar`)
             }}
           />
         </div>
@@ -246,20 +193,20 @@ export default function WorkspaceDashboard({ params }: { params: { id: string } 
                         </div>
                       ) : (
                         <div className="space-y-4">
-                          {clients.slice(0, 3).map((client) => {
-                            const clientTasks = tasks.filter(task => task.project_id === client.id)
-                            const completedTasks = clientTasks.filter(task => task.status === 'done').length
-
+                          {clients.slice(0, 3).map((client: any) => {
                             return (
                               <div key={client.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
                                 <div className="flex-1">
                                   <h4 className="font-medium text-gray-900">{client.name}</h4>
-                                  <p className="text-sm text-gray-600">{client.description}</p>
+                                  <p className="text-sm text-gray-600">{client.description || 'Sin descripción'}</p>
                                   <div className="flex items-center space-x-4 mt-2">
-                                    <span className="text-sm text-gray-500">
-                                      {completedTasks}/{clientTasks.length} tareas completadas
-                                    </span>
-                                    <Badge variant="outline" className="text-green-600 border-green-600">
+                                    <Badge variant="outline" className={
+                                      client.status === 'active' 
+                                        ? 'text-green-600 border-green-600' 
+                                        : client.status === 'paused'
+                                        ? 'text-yellow-600 border-yellow-600'
+                                        : 'text-gray-600 border-gray-600'
+                                    }>
                                       {client.status}
                                     </Badge>
                                   </div>
@@ -269,11 +216,11 @@ export default function WorkspaceDashboard({ params }: { params: { id: string } 
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => {
-                                      console.log('Opening client:', client.id)
-                                      router.push(`/workspaces/${params.id}/projects/${client.id}/clickup-list`)
+                                      console.log('Viewing client:', client.id)
+                                      router.push(`/workspaces/${params.id}/clients`)
                                     }}
                                   >
-                                    Abrir
+                                    Ver Detalles
                                   </Button>
                                 </div>
                               </div>
@@ -284,84 +231,44 @@ export default function WorkspaceDashboard({ params }: { params: { id: string } 
                     </div>
                   </div>
 
-          {/* Recent Tasks */}
+          {/* Financial Summary */}
           <div className="bg-white rounded-lg shadow-sm border">
             <div className="p-6 border-b">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">Tareas Recientes</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Resumen Financiero</h3>
                 <Button 
                   variant="outline" 
                   size="sm"
                   onClick={() => {
-                    console.log('Viewing all tasks...')
-                    setActiveModal('reports')
+                    router.push(`/workspaces/${params.id}/finance`)
                   }}
                 >
-                  Ver todas
+                  Ver Finanzas
                 </Button>
               </div>
             </div>
             <div className="p-6">
-              <div className="space-y-4">
-                {recentTasks.map((task) => (
-                  <div key={task.id} className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <h4 className="font-medium text-gray-900">{task.title}</h4>
-                      <p className="text-sm text-gray-600">{task.project}</p>
-                      <div className="flex items-center space-x-2 mt-2">
-                        <Badge className={getPriorityColor(task.priority)}>
-                          {task.priority}
-                        </Badge>
-                        <Badge className={getStatusColor(task.status)}>
-                          {task.status}
-                        </Badge>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm text-gray-600">{task.assignee}</p>
-                      <p className="text-xs text-gray-500">{task.dueDate}</p>
-                    </div>
-                  </div>
-                ))}
+              <div className="text-center py-8">
+                <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-500">Visita la sección de Finanzas para ver el resumen completo</p>
+                <Button
+                  variant="outline"
+                  className="mt-4"
+                  onClick={() => router.push(`/workspaces/${params.id}/finance`)}
+                >
+                  Ir a Finanzas
+                </Button>
               </div>
             </div>
           </div>
         </div>
       </main>
 
-      {/* Interactive Modals */}
+      {/* Client Creation Modal */}
       <ClientCreationModal
         isOpen={showClientCreation}
         onClose={() => setShowClientCreation(false)}
         onClientCreated={handleClientCreated}
-      />
-      
-      <InteractiveModal
-        isOpen={activeModal === 'project'}
-        onClose={() => setActiveModal(null)}
-        type="project"
-        title="Gestión de Proyectos"
-      />
-      
-      <InteractiveModal
-        isOpen={activeModal === 'members'}
-        onClose={() => setActiveModal(null)}
-        type="members"
-        title="Miembros del Equipo"
-      />
-      
-      <InteractiveModal
-        isOpen={activeModal === 'reports'}
-        onClose={() => setActiveModal(null)}
-        type="reports"
-        title="Reportes y Estadísticas"
-      />
-      
-      <InteractiveModal
-        isOpen={activeModal === 'settings'}
-        onClose={() => setActiveModal(null)}
-        type="settings"
-        title="Configuración del Workspace"
       />
     </div>
   )

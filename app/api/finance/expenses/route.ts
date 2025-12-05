@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { FinanceService } from '@/lib/services/finance'
 
-function isAdminUser(userNameOrUsername?: string) {
-  const v = (userNameOrUsername || '').toLowerCase()
-  return v === 'miguel' || v === 'raul'
-}
-
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -20,10 +15,6 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    // Basic admin check using provided current_user_name (from client) for now
-    if (!isAdminUser(body.current_user)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
 
     const record = await FinanceService.createExpense({
       workspace_id: body.workspace_id,
@@ -44,9 +35,6 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
-    if (!isAdminUser(body.current_user)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
 
     if (!body.id) {
       return NextResponse.json({ error: 'Expense id is required' }, { status: 400 })
@@ -75,10 +63,6 @@ export async function DELETE(request: NextRequest) {
 
     if (!id) {
       return NextResponse.json({ error: 'Expense id is required' }, { status: 400 })
-    }
-
-    if (!isAdminUser(currentUser)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     await FinanceService.deleteExpense(id)

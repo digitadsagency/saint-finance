@@ -102,24 +102,33 @@ export function ClientCreationModal({ isOpen, onClose, onClientCreated, workspac
 
   if (!isOpen) return null
 
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) {
+      onClose()
+    }
+  }
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-        <div className="p-6 border-b">
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto"
+      onClick={handleBackdropClick}
+    >
+      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full my-4 flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+        <div className="p-3 border-b bg-white rounded-t-lg flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <Plus className="h-5 w-5 text-blue-600" />
-              <h2 className="text-xl font-semibold text-gray-900">Agregar Nuevo Cliente</h2>
+              <Plus className="h-4 w-4 text-blue-600" />
+              <h2 className="text-base font-semibold text-gray-900">Agregar Nuevo Cliente</h2>
             </div>
-            <Button variant="ghost" size="sm" onClick={onClose}>
+            <Button variant="ghost" size="sm" onClick={onClose} className="h-7 w-7 p-0">
               <X className="h-4 w-4" />
             </Button>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-3 space-y-2 overflow-y-auto flex-grow">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs font-medium text-gray-700 mb-1">
               Nombre del Cliente
             </label>
             <Input
@@ -127,236 +136,216 @@ export function ClientCreationModal({ isOpen, onClose, onClientCreated, workspac
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="Ej: Empresa ABC, Restaurante XYZ"
               required
+              className="h-8 text-sm"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs font-medium text-gray-700 mb-1">
               Descripción
             </label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               placeholder="Información adicional sobre el cliente..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              rows={3}
+              className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              rows={2}
             />
           </div>
 
           {/* Audiovisual/Video */}
-          <div className="space-y-4">
-            <div className="border rounded-lg p-4 bg-blue-50">
-              <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
-                <Calendar className="h-4 w-4 mr-2 text-blue-600" />
+          <div className="space-y-2">
+            <div className="border rounded-lg p-2 bg-blue-50">
+              <h3 className="text-xs font-semibold text-gray-900 mb-1.5 flex items-center">
+                <Calendar className="h-3 w-3 mr-1.5 text-blue-600" />
                 Audiovisual/Video (por mes)
               </h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-4 gap-1.5">
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Reel Corto
-                  </label>
+                  <label className="block text-[10px] font-medium text-gray-700 mb-0.5">Reel Corto</label>
                   <Input
                     type="number"
                     value={formData.monthly_reel_corto}
                     onChange={(e) => setFormData({ ...formData, monthly_reel_corto: parseInt(e.target.value) || 0 })}
                     placeholder="0"
                     min="0"
-                    className="w-full"
+                    className="w-full h-7 text-xs"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Reel Largo
-                  </label>
+                  <label className="block text-[10px] font-medium text-gray-700 mb-0.5">Reel Largo</label>
                   <Input
                     type="number"
                     value={formData.monthly_reel_largo}
                     onChange={(e) => setFormData({ ...formData, monthly_reel_largo: parseInt(e.target.value) || 0 })}
                     placeholder="0"
                     min="0"
-                    className="w-full"
+                    className="w-full h-7 text-xs"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Reel (genérico)
-                  </label>
+                  <label className="block text-[10px] font-medium text-gray-700 mb-0.5">Reel</label>
                   <Input
                     type="number"
                     value={formData.monthly_reel}
                     onChange={(e) => setFormData({ ...formData, monthly_reel: parseInt(e.target.value) || 0 })}
                     placeholder="0"
                     min="0"
-                    className="w-full"
+                    className="w-full h-7 text-xs"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Video
-                  </label>
+                  <label className="block text-[10px] font-medium text-gray-700 mb-0.5">Video</label>
                   <Input
                     type="number"
                     value={formData.monthly_video}
                     onChange={(e) => setFormData({ ...formData, monthly_video: parseInt(e.target.value) || 0 })}
                     placeholder="0"
                     min="0"
-                    className="w-full"
+                    className="w-full h-7 text-xs"
                   />
                 </div>
               </div>
             </div>
 
             {/* Diseño */}
-            <div className="border rounded-lg p-4 bg-purple-50">
-              <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
-                <Target className="h-4 w-4 mr-2 text-purple-600" />
+            <div className="border rounded-lg p-2 bg-purple-50">
+              <h3 className="text-xs font-semibold text-gray-900 mb-1.5 flex items-center">
+                <Target className="h-3 w-3 mr-1.5 text-purple-600" />
                 Diseño (por mes)
               </h3>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-1.5">
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Diseño Simple
-                  </label>
+                  <label className="block text-[10px] font-medium text-gray-700 mb-0.5">Simple</label>
                   <Input
                     type="number"
                     value={formData.monthly_diseno_simple}
                     onChange={(e) => setFormData({ ...formData, monthly_diseno_simple: parseInt(e.target.value) || 0 })}
                     placeholder="0"
                     min="0"
-                    className="w-full"
+                    className="w-full h-7 text-xs"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Diseño Complejo
-                  </label>
+                  <label className="block text-[10px] font-medium text-gray-700 mb-0.5">Complejo</label>
                   <Input
                     type="number"
                     value={formData.monthly_diseno_complejo}
                     onChange={(e) => setFormData({ ...formData, monthly_diseno_complejo: parseInt(e.target.value) || 0 })}
                     placeholder="0"
                     min="0"
-                    className="w-full"
+                    className="w-full h-7 text-xs"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Diseño (genérico)
-                  </label>
+                  <label className="block text-[10px] font-medium text-gray-700 mb-0.5">Genérico</label>
                   <Input
                     type="number"
                     value={formData.monthly_diseno}
                     onChange={(e) => setFormData({ ...formData, monthly_diseno: parseInt(e.target.value) || 0 })}
                     placeholder="0"
                     min="0"
-                    className="w-full"
+                    className="w-full h-7 text-xs"
                   />
                 </div>
               </div>
             </div>
 
             {/* Fotos */}
-            <div className="border rounded-lg p-4 bg-green-50">
-              <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
-                <Users className="h-4 w-4 mr-2 text-green-600" />
+            <div className="border rounded-lg p-2 bg-green-50">
+              <h3 className="text-xs font-semibold text-gray-900 mb-1.5 flex items-center">
+                <Users className="h-3 w-3 mr-1.5 text-green-600" />
                 Fotos (por mes)
               </h3>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-1.5">
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Foto Simple
-                  </label>
+                  <label className="block text-[10px] font-medium text-gray-700 mb-0.5">Simple</label>
                   <Input
                     type="number"
                     value={formData.monthly_foto_simple}
                     onChange={(e) => setFormData({ ...formData, monthly_foto_simple: parseInt(e.target.value) || 0 })}
                     placeholder="0"
                     min="0"
-                    className="w-full"
+                    className="w-full h-7 text-xs"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Foto Elaborada
-                  </label>
+                  <label className="block text-[10px] font-medium text-gray-700 mb-0.5">Elaborada</label>
                   <Input
                     type="number"
                     value={formData.monthly_foto_elaborada}
                     onChange={(e) => setFormData({ ...formData, monthly_foto_elaborada: parseInt(e.target.value) || 0 })}
                     placeholder="0"
                     min="0"
-                    className="w-full"
+                    className="w-full h-7 text-xs"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Foto (genérico)
-                  </label>
+                  <label className="block text-[10px] font-medium text-gray-700 mb-0.5">Genérica</label>
                   <Input
                     type="number"
                     value={formData.monthly_foto}
                     onChange={(e) => setFormData({ ...formData, monthly_foto: parseInt(e.target.value) || 0 })}
                     placeholder="0"
                     min="0"
-                    className="w-full"
+                    className="w-full h-7 text-xs"
                   />
                 </div>
               </div>
             </div>
 
             {/* Sesiones de Grabación */}
-            <div className="border rounded-lg p-4 bg-indigo-50">
-              <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
-                <Calendar className="h-4 w-4 mr-2 text-indigo-600" />
-                Sesiones de Grabación (por mes)
-              </h3>
-              <div className="grid grid-cols-1 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Sesiones de Grabación
-                  </label>
+            <div className="border rounded-lg p-2 bg-indigo-50">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-semibold text-gray-900 flex items-center">
+                  <Calendar className="h-3 w-3 mr-1.5 text-indigo-600" />
+                  Sesiones de Grabación
+                </h3>
+                <div className="flex items-center gap-2">
                   <Input
                     type="number"
                     value={formData.monthly_recording_sessions}
                     onChange={(e) => setFormData({ ...formData, monthly_recording_sessions: parseInt(e.target.value) || 0 })}
                     placeholder="0"
                     min="0"
-                    className="w-full"
+                    className="w-16 h-7 text-xs"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Cada sesión cuenta como 3 horas de trabajo</p>
+                  <span className="text-[10px] text-gray-500">(3h c/u)</span>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="flex space-x-3 pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              className="flex-1"
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="submit"
-              disabled={isLoading || !formData.name}
-              className="flex-1 bg-blue-600 hover:bg-blue-700"
-            >
-              {isLoading ? (
-                <div className="flex items-center space-x-2">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  <span>Agregando...</span>
-                </div>
-              ) : (
-                <div className="flex items-center space-x-2">
-                  <Plus className="h-4 w-4" />
-                  <span>Agregar Cliente</span>
-                </div>
-              )}
-            </Button>
-          </div>
         </form>
+        
+        {/* Footer fijo */}
+        <div className="flex gap-2 p-3 border-t bg-gray-50 rounded-b-lg flex-shrink-0">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            className="flex-1 h-9"
+          >
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={isLoading || !formData.name}
+            className="flex-1 bg-blue-600 hover:bg-blue-700 h-9"
+          >
+            {isLoading ? (
+              <div className="flex items-center space-x-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                <span>Agregando...</span>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-2">
+                <Plus className="h-4 w-4" />
+                <span>Agregar Cliente</span>
+              </div>
+            )}
+          </Button>
+        </div>
       </div>
     </div>
   )

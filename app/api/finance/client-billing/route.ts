@@ -1,15 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { FinanceService } from '@/lib/services/finance'
 
-function isAdminUser(user: any): boolean {
-  if (!user) return false
-  // Accept both object {name, username} and string
-  const name = typeof user === 'string' 
-    ? user.toLowerCase()
-    : (user.name || user.username || '').toLowerCase()
-  return name === 'miguel' || name === 'raul'
-}
-
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -24,9 +15,6 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    if (!isAdminUser(body.current_user)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
 
     const record = await FinanceService.createClientBilling({
       workspace_id: body.workspace_id,
@@ -43,9 +31,6 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
-    if (!isAdminUser(body.current_user)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
 
     if (!body.id) {
       return NextResponse.json({ error: 'ID is required' }, { status: 400 })

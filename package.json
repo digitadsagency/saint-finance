@@ -10,6 +10,7 @@
     "test": "vitest",
     "test:e2e": "playwright test",
     "seed": "tsx scripts/seed-sheets.ts",
+    "setup-finance": "tsx scripts/setup-finance-sheets.ts",
     "analyze": "ANALYZE=true next build",
     "lighthouse": "lhci autorun"
   },

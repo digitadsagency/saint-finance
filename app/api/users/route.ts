@@ -13,3 +13,33 @@ export async function GET(request: NextRequest) {
     )
   }
 }
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const { name, email, password, role = 'member', avatar = '👨‍💼' } = body
+
+    if (!name || !email) {
+      return NextResponse.json(
+        { error: 'Nombre y email son requeridos' },
+        { status: 400 }
+      )
+    }
+
+    const newUser = await UsersService.createUser({
+      name,
+      email,
+      password: password || 'password123',
+      role,
+      avatar
+    })
+
+    return NextResponse.json(newUser, { status: 201 })
+  } catch (error: any) {
+    console.error('Error creating user:', error)
+    return NextResponse.json(
+      { error: error.message || 'Failed to create user' },
+      { status: 500 }
+    )
+  }
+}
