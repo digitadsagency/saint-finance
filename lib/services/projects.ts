@@ -355,7 +355,8 @@ export class ProjectsService {
       // Get sheet ID
       const metadata = await this.withRetry(() => sheets.spreadsheets.get({ spreadsheetId }))
       const sheet = metadata.data.sheets?.find(s => s.properties?.title === 'projects')
-      if (!sheet?.properties?.sheetId) {
+      const sheetId = sheet?.properties?.sheetId
+      if (sheetId === undefined || sheetId === null) {
         throw new Error('Projects sheet not found')
       }
 
@@ -365,7 +366,7 @@ export class ProjectsService {
           requests: [{
             deleteDimension: {
               range: {
-                sheetId: sheet.properties.sheetId,
+                sheetId: sheetId,
                 dimension: 'ROWS',
                 startIndex: projectIndex + 1, // +1 because we start from row 2
                 endIndex: projectIndex + 2
