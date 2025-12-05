@@ -4,8 +4,6 @@ import { lazy, Suspense } from 'react'
 import { Loader2 } from 'lucide-react'
 
 // Lazy load heavy components
-export const LazyKanbanBoard = lazy(() => import('./KanbanBoard').then(module => ({ default: module.KanbanBoard })))
-export const LazyTaskDrawer = lazy(() => import('./TaskDrawer').then(module => ({ default: module.TaskDrawer })))
 export const LazyInteractiveModal = lazy(() => import('./InteractiveModal').then(module => ({ default: module.InteractiveModal })))
 export const LazyProjectCreationModal = lazy(() => import('./ProjectCreationModal').then(module => ({ default: module.ClientCreationModal })))
 export const LazyTeamEfficiencyWidget = lazy(() => import('./TeamEfficiencyWidget').then(module => ({ default: module.TeamEfficiencyWidget })))
@@ -33,8 +31,6 @@ export function withLazyLoading<T extends object>(
 }
 
 // Pre-configured lazy components with loading states
-export const KanbanBoardLazy = withLazyLoading(LazyKanbanBoard)
-export const TaskDrawerLazy = withLazyLoading(LazyTaskDrawer)
 export const InteractiveModalLazy = withLazyLoading(LazyInteractiveModal)
 export const ProjectCreationModalLazy = withLazyLoading(LazyProjectCreationModal)
 export const TeamEfficiencyWidgetLazy = withLazyLoading(LazyTeamEfficiencyWidget)
