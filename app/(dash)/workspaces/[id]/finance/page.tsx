@@ -184,7 +184,6 @@ export default function FinancePage({ params }: { params: { id: string } }) {
     const safeSalaries = Array.isArray(salaries) ? salaries : []
     
     // Ingresos esperados (facturación mensual de clientes ACTIVOS EN EL MES ACTUAL)
-    const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
     const ingresosEsperados = safeBillings.reduce((sum: number, b: any) => {
       const project = projects.find((p: any) => p.id === b.project_id)
       if (!isClientActiveInMonth(project, currentMonth)) return sum
