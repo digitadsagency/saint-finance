@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Search, ChevronDown, Check } from 'lucide-react'
 
 interface PaymentRecordDialogProps {
   open: boolean
@@ -44,6 +44,10 @@ export function PaymentRecordDialog({
     notes: ''
   })
   const [submitting, setSubmitting] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   // Actualizar el formulario cuando cambia defaultDate o defaultBillingId, o cuando se abre el diálogo
   useEffect(() => {
@@ -70,6 +74,28 @@ export function PaymentRecordDialog({
 
   const selectedBilling = billings.find(b => b.id === formData.billing_id)
   const selectedProject = projects.find(p => p.id === selectedBilling?.project_id)
+
+  // Filtrar billings por término de búsqueda
+  const filteredBillings = useMemo(() => {
+    if (!searchTerm.trim()) return billings
+    const term = searchTerm.toLowerCase()
+    return billings.filter(billing => {
+      const project = projects.find(p => p.id === billing.project_id)
+      const projectName = project?.name?.toLowerCase() || ''
+      return projectName.includes(term)
+    })
+  }, [billings, projects, searchTerm])
+
+  // Cerrar dropdown al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -112,24 +138,81 @@ export function PaymentRecordDialog({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <Label htmlFor="billing_id">Cliente</Label>
-            <Select
-              value={formData.billing_id}
-              onValueChange={(value) => setFormData({ ...formData, billing_id: value })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecciona un cliente" />
-              </SelectTrigger>
-              <SelectContent>
-                {billings.map((billing) => {
-                  const project = projects.find(p => p.id === billing.project_id)
-                  return (
-                    <SelectItem key={billing.id} value={billing.id}>
-                      {project?.name || 'Cliente'} - {billing.monthly_amount.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
-                    </SelectItem>
-                  )
-                })}
-              </SelectContent>
-            </Select>
+            <div className="relative" ref={dropdownRef}>
+              {/* Botón que abre el dropdown */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDropdownOpen(!isDropdownOpen)
+                  if (!isDropdownOpen) {
+                    setTimeout(() => inputRef.current?.focus(), 100)
+                  }
+                }}
+                className="w-full flex items-center justify-between px-3 py-2 text-sm border rounded-md bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <span className={selectedProject ? 'text-gray-900' : 'text-gray-500'}>
+                  {selectedProject 
+                    ? `${selectedProject.name} - ${selectedBilling?.monthly_amount?.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}`
+                    : 'Selecciona un cliente'
+                  }
+                </span>
+                <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Dropdown con búsqueda */}
+              {isDropdownOpen && (
+                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg">
+                  {/* Campo de búsqueda */}
+                  <div className="p-2 border-b">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <input
+                        ref={inputRef}
+                        type="text"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        placeholder="Buscar cliente..."
+                        className="w-full pl-8 pr-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        autoComplete="off"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Lista de clientes */}
+                  <div className="max-h-48 overflow-y-auto">
+                    {filteredBillings.length === 0 ? (
+                      <div className="p-3 text-sm text-gray-500 text-center">
+                        No se encontraron clientes
+                      </div>
+                    ) : (
+                      filteredBillings.map((billing) => {
+                        const project = projects.find(p => p.id === billing.project_id)
+                        const isSelected = formData.billing_id === billing.id
+                        return (
+                          <button
+                            key={billing.id}
+                            type="button"
+                            onClick={() => {
+                              setFormData({ ...formData, billing_id: billing.id })
+                              setIsDropdownOpen(false)
+                              setSearchTerm('')
+                            }}
+                            className={`w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-blue-50 ${
+                              isSelected ? 'bg-blue-100 text-blue-900' : 'text-gray-900'
+                            }`}
+                          >
+                            <span>
+                              {project?.name || 'Cliente'} - {billing.monthly_amount?.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+                            </span>
+                            {isSelected && <Check className="h-4 w-4 text-blue-600" />}
+                          </button>
+                        )
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
             {selectedBilling && (
               <p className="text-xs text-gray-500 mt-1">
                 Día de pago esperado: {selectedBilling.payment_day} de cada mes
