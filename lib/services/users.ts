@@ -48,7 +48,7 @@ export const UsersService = {
         // Mapear por posición según los headers esperados
         expectedHeaders.forEach((header, index) => {
           if (row[index] !== undefined && row[index] !== null && row[index] !== '') {
-            user[header] = row[index];
+          user[header] = row[index];
           }
         });
         return user;

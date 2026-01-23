@@ -186,9 +186,9 @@ export function PaymentRecordDialog({
                       </div>
                     ) : (
                       filteredBillings.map((billing) => {
-                        const project = projects.find(p => p.id === billing.project_id)
+                  const project = projects.find(p => p.id === billing.project_id)
                         const isSelected = formData.billing_id === billing.id
-                        return (
+                  return (
                           <button
                             key={billing.id}
                             type="button"
@@ -206,7 +206,7 @@ export function PaymentRecordDialog({
                             </span>
                             {isSelected && <Check className="h-4 w-4 text-blue-600" />}
                           </button>
-                        )
+                  )
                       })
                     )}
                   </div>

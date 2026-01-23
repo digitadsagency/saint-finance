@@ -605,7 +605,9 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
                 const paidPayments = getPaidPaymentsForDay(date)
                 const isTodayDate = isToday(date)
                 const isCurrentMonthDay = isCurrentMonth(date)
-                const hasPayments = expectedPayments.length > 0 || paidPayments.length > 0
+                // Contar solo pagos pendientes (no los que ya están pagados)
+                const pendingPayments = expectedPayments.filter(p => !paidPayments.some(pp => pp.billing_id === p.id))
+                const hasPayments = pendingPayments.length > 0 || paidPayments.length > 0
 
                 return (
                   <div
@@ -626,11 +628,19 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
                         {date.getDate()}
                       </span>
                       <div className="flex items-center gap-0.5">
-                        {expectedPayments.length > 0 && (
-                          <Badge className="bg-blue-100 text-blue-700 border-blue-300 text-[10px] px-1 py-0">
-                            {expectedPayments.length}
-                          </Badge>
-                        )}
+                        {/* Badge de pendientes - solo mostrar si hay pagos sin pagar */}
+                        {(() => {
+                          const pendingCount = expectedPayments.filter(p => !paidPayments.some(pp => pp.billing_id === p.id)).length
+                          if (pendingCount > 0) {
+                            return (
+                              <Badge className="bg-yellow-100 text-yellow-700 border-yellow-300 text-[10px] px-1 py-0">
+                                {pendingCount}
+                              </Badge>
+                            )
+                          }
+                          return null
+                        })()}
+                        {/* Badge de pagados */}
                         {paidPayments.length > 0 && (
                           <Badge className="bg-green-100 text-green-700 border-green-300 text-[10px] px-1 py-0">
                             ✓{paidPayments.length}
@@ -651,31 +661,32 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
                     </div>
                     
                     <div className="space-y-0.5 max-h-[80px] overflow-y-auto">
-                      {/* Pagos esperados - formato compacto */}
-                      {expectedPayments.map((payment) => {
-                        const hasPaid = paidPayments.some(pp => pp.billing_id === payment.id)
-                        const paymentId = payment.id || payment.project_id || payment.projectId
-                        return (
-                          <div
-                            key={`expected-${paymentId}`}
-                            className={`px-1 py-0.5 rounded text-[10px] ${
-                              hasPaid 
-                                ? 'bg-green-200/50 text-green-800' 
-                                : 'bg-yellow-100 text-yellow-800'
-                            }`}
-                            title={`${payment.projectName}: ${formatMXN(payment.amount)}`}
-                          >
-                            <div className="flex items-center justify-between gap-1">
-                              <span className="font-medium truncate max-w-[60px]">
-                                {payment.projectName}
-                              </span>
-                              <span className="font-semibold text-[9px] whitespace-nowrap">
-                                {formatMXN(payment.amount).replace('MXN', '').replace('$', '$')}
-                              </span>
+                      {/* Pagos esperados PENDIENTES - formato compacto (solo mostrar si NO han sido pagados) */}
+                      {expectedPayments
+                        .filter(payment => {
+                          // Solo mostrar si NO ha sido pagado todavía
+                          const hasPaid = paidPayments.some(pp => pp.billing_id === payment.id)
+                          return !hasPaid
+                        })
+                        .map((payment) => {
+                          const paymentId = payment.id || payment.project_id || payment.projectId
+                          return (
+                            <div
+                              key={`expected-${paymentId}`}
+                              className="px-1 py-0.5 rounded text-[10px] bg-yellow-100 text-yellow-800"
+                              title={`${payment.projectName}: ${formatMXN(payment.amount)} (Pendiente)`}
+                            >
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="font-medium truncate max-w-[60px]">
+                                  {payment.projectName}
+                                </span>
+                                <span className="font-semibold text-[9px] whitespace-nowrap">
+                                  {formatMXN(payment.amount).replace('MXN', '').replace('$', '$')}
+                                </span>
+                              </div>
                             </div>
-                          </div>
-                        )
-                      })}
+                          )
+                        })}
                       
                       {/* Pagos realizados - formato compacto */}
                       {paidPayments.map((payment) => {

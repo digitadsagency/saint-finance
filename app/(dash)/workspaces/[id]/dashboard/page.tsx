@@ -33,10 +33,10 @@ export default function WorkspaceDashboard({ params }: { params: { id: string } 
   
   // Load billings for all users
   useEffect(() => {
-    fetch(`/api/finance/client-billing?workspaceId=${params.id}`)
-      .then(res => res.ok ? res.json() : [])
-      .then(data => setBillings(Array.isArray(data) ? data : []))
-      .catch(() => setBillings([]))
+      fetch(`/api/finance/client-billing?workspaceId=${params.id}`)
+        .then(res => res.ok ? res.json() : [])
+        .then(data => setBillings(Array.isArray(data) ? data : []))
+        .catch(() => setBillings([]))
   }, [params.id])
 
   useEffect(() => {
@@ -138,7 +138,7 @@ export default function WorkspaceDashboard({ params }: { params: { id: string } 
 
 
         {/* Payment Reminders */}
-        <PaymentReminders billings={billings} clients={clients} workspaceId={params.id} router={router} />
+          <PaymentReminders billings={billings} clients={clients} workspaceId={params.id} router={router} />
 
         {/* Quick Actions */}
         <div className="mb-8">

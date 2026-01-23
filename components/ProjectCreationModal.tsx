@@ -300,7 +300,7 @@ export function ClientCreationModal({ isOpen, onClose, onClientCreated, workspac
                 <h3 className="text-xs font-semibold text-gray-900 flex items-center">
                   <Calendar className="h-3 w-3 mr-1.5 text-indigo-600" />
                   Sesiones de Grabación
-                </h3>
+              </h3>
                 <div className="flex items-center gap-2">
                   <Input
                     type="number"
@@ -320,32 +320,32 @@ export function ClientCreationModal({ isOpen, onClose, onClientCreated, workspac
         
         {/* Footer fijo */}
         <div className="flex gap-2 p-3 border-t bg-gray-50 rounded-b-lg flex-shrink-0">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onClose}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
             className="flex-1 h-9"
-          >
-            Cancelar
-          </Button>
-          <Button
+            >
+              Cancelar
+            </Button>
+            <Button
             onClick={handleSubmit}
-            disabled={isLoading || !formData.name}
+              disabled={isLoading || !formData.name}
             className="flex-1 bg-blue-600 hover:bg-blue-700 h-9"
-          >
-            {isLoading ? (
-              <div className="flex items-center space-x-2">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                <span>Agregando...</span>
-              </div>
-            ) : (
-              <div className="flex items-center space-x-2">
-                <Plus className="h-4 w-4" />
-                <span>Agregar Cliente</span>
-              </div>
-            )}
-          </Button>
-        </div>
+            >
+              {isLoading ? (
+                <div className="flex items-center space-x-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <span>Agregando...</span>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-2">
+                  <Plus className="h-4 w-4" />
+                  <span>Agregar Cliente</span>
+                </div>
+              )}
+            </Button>
+          </div>
       </div>
     </div>
   )

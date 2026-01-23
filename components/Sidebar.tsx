@@ -157,45 +157,45 @@ export function Sidebar({ workspaceId }: SidebarProps) {
               </Link>
             )
           })}
-          <Link
-            href={`/workspaces/${workspaceId}/finance`}
-            className={cn(
-              "flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors group",
-              isActive(`/workspaces/${workspaceId}/finance`)
-                ? "bg-blue-50 text-blue-700 font-medium"
-                : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
-            )}
-            title={isCollapsed ? 'Finanzas' : undefined}
-          >
-            <BarChart3 className="h-5 w-5 flex-shrink-0 text-gray-500 group-hover:text-gray-700" />
-            {!isCollapsed && <span className="text-sm">Finanzas</span>}
-          </Link>
-          <Link
-            href={`/workspaces/${workspaceId}/finance/metrics`}
-            className={cn(
-              "flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors group",
-              isActive(`/workspaces/${workspaceId}/finance/metrics`)
-                ? "bg-blue-50 text-blue-700 font-medium"
-                : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
-            )}
-            title={isCollapsed ? 'Métricas' : undefined}
-          >
-            <BarChart3 className="h-5 w-5 flex-shrink-0 text-gray-500 group-hover:text-gray-700" />
-            {!isCollapsed && <span className="text-sm">Métricas</span>}
-          </Link>
-          <Link
-            href={`/workspaces/${workspaceId}/finance/payments-calendar`}
-            className={cn(
-              "flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors group",
-              isActive(`/workspaces/${workspaceId}/finance/payments-calendar`)
-                ? "bg-blue-50 text-blue-700 font-medium"
-                : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
-            )}
-            title={isCollapsed ? 'Calendario de Pagos' : undefined}
-          >
-            <Calendar className="h-5 w-5 flex-shrink-0 text-gray-500 group-hover:text-gray-700" />
-            {!isCollapsed && <span className="text-sm">Calendario de Pagos</span>}
-          </Link>
+              <Link
+                href={`/workspaces/${workspaceId}/finance`}
+                className={cn(
+                  "flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors group",
+                  isActive(`/workspaces/${workspaceId}/finance`)
+                    ? "bg-blue-50 text-blue-700 font-medium"
+                    : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                )}
+                title={isCollapsed ? 'Finanzas' : undefined}
+              >
+                <BarChart3 className="h-5 w-5 flex-shrink-0 text-gray-500 group-hover:text-gray-700" />
+                {!isCollapsed && <span className="text-sm">Finanzas</span>}
+              </Link>
+              <Link
+                href={`/workspaces/${workspaceId}/finance/metrics`}
+                className={cn(
+                  "flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors group",
+                  isActive(`/workspaces/${workspaceId}/finance/metrics`)
+                    ? "bg-blue-50 text-blue-700 font-medium"
+                    : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                )}
+                title={isCollapsed ? 'Métricas' : undefined}
+              >
+                <BarChart3 className="h-5 w-5 flex-shrink-0 text-gray-500 group-hover:text-gray-700" />
+                {!isCollapsed && <span className="text-sm">Métricas</span>}
+              </Link>
+              <Link
+                href={`/workspaces/${workspaceId}/finance/payments-calendar`}
+                className={cn(
+                  "flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors group",
+                  isActive(`/workspaces/${workspaceId}/finance/payments-calendar`)
+                    ? "bg-blue-50 text-blue-700 font-medium"
+                    : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                )}
+                title={isCollapsed ? 'Calendario de Pagos' : undefined}
+              >
+                <Calendar className="h-5 w-5 flex-shrink-0 text-gray-500 group-hover:text-gray-700" />
+                {!isCollapsed && <span className="text-sm">Calendario de Pagos</span>}
+              </Link>
         </div>
       </div>
 

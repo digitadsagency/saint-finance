@@ -143,7 +143,7 @@ export function ProjectEditModal({ isOpen, onClose, onProjectUpdated, project }:
       if (isQuotaError) {
         alert('❌ Se excedió la cuota de Google Sheets. Espera unos segundos e inténtalo de nuevo.')
       } else {
-        alert('❌ Error de conexión. Inténtalo de nuevo.')
+      alert('❌ Error de conexión. Inténtalo de nuevo.')
       }
     } finally {
       setIsLoading(false)

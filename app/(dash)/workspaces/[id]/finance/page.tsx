@@ -266,22 +266,22 @@ export default function FinancePage({ params }: { params: { id: string } }) {
 
   // Load data function
   const loadData = useCallback(async () => {
-    try {
+      try {
       setIsRefreshing(true)
       // Invalidate cache to force fresh data
       const cacheBuster = `?workspaceId=${params.id}&_t=${Date.now()}`
-      const [sal, bil, wl, exp, inc] = await Promise.all([
+        const [sal, bil, wl, exp, inc] = await Promise.all([
         fetch(`/api/finance/salaries${cacheBuster}`).then(async r => (r.ok ? r.json() : [])),
         fetch(`/api/finance/client-billing${cacheBuster}`).then(async r => (r.ok ? r.json() : [])),
         fetch(`/api/finance/worklogs${cacheBuster}`).then(async r => (r.ok ? r.json() : [])),
         fetch(`/api/finance/expenses${cacheBuster}`).then(async r => (r.ok ? r.json() : [])),
         fetch(`/api/finance/incomes${cacheBuster}`).then(async r => (r.ok ? r.json() : []))
-      ])
-      setSalaries(Array.isArray(sal) ? sal : [])
-      setBillings(Array.isArray(bil) ? bil : [])
-      setWorklogs(Array.isArray(wl) ? wl : [])
-      setExpenses(Array.isArray(exp) ? exp : [])
-      setIncomes(Array.isArray(inc) ? inc : [])
+        ])
+        setSalaries(Array.isArray(sal) ? sal : [])
+        setBillings(Array.isArray(bil) ? bil : [])
+        setWorklogs(Array.isArray(wl) ? wl : [])
+        setExpenses(Array.isArray(exp) ? exp : [])
+        setIncomes(Array.isArray(inc) ? inc : [])
       // Also refresh projects and users data
       await Promise.all([
         refetchProjects(),
@@ -771,12 +771,12 @@ export default function FinancePage({ params }: { params: { id: string } }) {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900">Sueldos por empleado</h2>
             <div className="flex items-center gap-3">
-              <div className="bg-green-50 px-4 py-2 rounded-lg border border-green-200">
-                <div className="text-xs text-gray-600 mb-1">Gasto de Nómina Mensual Total</div>
-                <div className="text-xl font-bold text-green-700">
-                  {totalMonthlyPayroll.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
-                </div>
+            <div className="bg-green-50 px-4 py-2 rounded-lg border border-green-200">
+              <div className="text-xs text-gray-600 mb-1">Gasto de Nómina Mensual Total</div>
+              <div className="text-xl font-bold text-green-700">
+                {totalMonthlyPayroll.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
               </div>
+            </div>
               <Button
                 variant="outline"
                 onClick={() => setShowCreateUser(true)}
@@ -785,7 +785,7 @@ export default function FinancePage({ params }: { params: { id: string } }) {
                 <Plus className="h-4 w-4" />
                 Nuevo Empleado
               </Button>
-            </div>
+          </div>
           </div>
 
           {/* Modal para crear nuevo empleado */}
