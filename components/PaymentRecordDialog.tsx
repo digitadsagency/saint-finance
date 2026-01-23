@@ -19,6 +19,7 @@ interface PaymentRecordDialogProps {
     paid_amount: number
     paid_date: string
     payment_method?: string
+    payment_status?: string
     notes?: string
   }) => Promise<void>
   billings: any[]
@@ -43,16 +44,51 @@ export function PaymentRecordDialog({
     paid_amount: '',
     paid_date: new Date().toISOString().split('T')[0],
     payment_method: '',
+    payment_status: '',
     notes: ''
   })
   const [customMethod, setCustomMethod] = useState('')
   
   const PAYMENT_METHODS = ['Efectivo', 'Cuenta Marc', 'Cuenta Adal', 'Otro']
+  const PAYMENT_STATUSES = [
+    { value: 'adelantado', label: 'Adelantado', color: 'bg-blue-600' },
+    { value: 'ok', label: 'OK', color: 'bg-green-600' },
+    { value: 'atrasado', label: 'Atrasado', color: 'bg-red-600' },
+    { value: 'promesa', label: 'Promesa de pago', color: 'bg-orange-500' },
+    { value: 'parcial', label: 'Pago parcial', color: 'bg-yellow-500' }
+  ]
   const [submitting, setSubmitting] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Función para calcular el estatus automático basado en fechas
+  const calculateAutoStatus = (paidDate: string, expectedDate: string, paidAmount: number, expectedAmount: number) => {
+    if (!paidDate || !expectedDate) return 'ok'
+    
+    const paid = new Date(paidDate)
+    const expected = new Date(expectedDate)
+    const daysDiff = Math.ceil((expected.getTime() - paid.getTime()) / (1000 * 60 * 60 * 24))
+    
+    // Si pagó parcialmente
+    if (paidAmount < expectedAmount * 0.9) {
+      return 'parcial'
+    }
+    
+    // Si pagó más de 3 días antes
+    if (daysDiff > 3) {
+      return 'adelantado'
+    }
+    
+    // Si pagó tarde
+    if (daysDiff < 0) {
+      return 'atrasado'
+    }
+    
+    // Si pagó a tiempo (entre 3 días antes y la fecha)
+    return 'ok'
+  }
 
   // Actualizar el formulario cuando cambia defaultDate o defaultBillingId, o cuando se abre el diálogo
   useEffect(() => {
@@ -66,6 +102,7 @@ export function PaymentRecordDialog({
           paid_amount: editingPayment.paid_amount?.toString() || '',
           paid_date: editingPayment.paid_date || new Date().toISOString().split('T')[0],
           payment_method: isKnownMethod ? existingMethod : 'Otro',
+          payment_status: editingPayment.payment_status || 'ok',
           notes: editingPayment.notes || ''
         })
         setCustomMethod(isKnownMethod ? '' : existingMethod)
@@ -76,6 +113,7 @@ export function PaymentRecordDialog({
           paid_amount: '',
           paid_date: defaultDate || new Date().toISOString().split('T')[0],
           payment_method: '',
+          payment_status: '',
           notes: ''
         })
         setCustomMethod('')
@@ -85,6 +123,28 @@ export function PaymentRecordDialog({
 
   const selectedBilling = billings.find(b => b.id === formData.billing_id)
   const selectedProject = projects.find(p => p.id === selectedBilling?.project_id)
+
+  // Calcular y sugerir estatus automáticamente cuando cambian los valores
+  useEffect(() => {
+    if (selectedBilling && formData.paid_date && formData.paid_amount && !editingPayment) {
+      // Calcular fecha esperada basado en el día de pago del billing
+      const paidDate = new Date(formData.paid_date)
+      const expectedDate = new Date(paidDate.getFullYear(), paidDate.getMonth(), selectedBilling.payment_day || 1)
+      const expectedDateStr = expectedDate.toISOString().split('T')[0]
+      
+      const autoStatus = calculateAutoStatus(
+        formData.paid_date,
+        expectedDateStr,
+        Number(formData.paid_amount),
+        Number(selectedBilling.monthly_amount || 0)
+      )
+      
+      // Solo actualizar si el usuario no ha seleccionado un estatus manualmente
+      if (!formData.payment_status) {
+        setFormData(prev => ({ ...prev, payment_status: autoStatus }))
+      }
+    }
+  }, [formData.billing_id, formData.paid_date, formData.paid_amount, selectedBilling, editingPayment])
 
   // Filtrar billings por término de búsqueda
   const filteredBillings = useMemo(() => {
@@ -125,6 +185,7 @@ export function PaymentRecordDialog({
         paid_amount: Number(formData.paid_amount),
         paid_date: formData.paid_date,
         payment_method: finalPaymentMethod,
+        payment_status: formData.payment_status || 'ok',
         notes: formData.notes
       })
       setFormData({
@@ -132,6 +193,7 @@ export function PaymentRecordDialog({
         paid_amount: '',
         paid_date: new Date().toISOString().split('T')[0],
         payment_method: '',
+        payment_status: '',
         notes: ''
       })
       setCustomMethod('')
@@ -298,6 +360,27 @@ export function PaymentRecordDialog({
                 className="mt-2"
               />
             )}
+          </div>
+
+          <div>
+            <Label htmlFor="payment_status">Estatus del Pago</Label>
+            <p className="text-xs text-gray-500 mb-2">Se selecciona automáticamente, pero puedes cambiarlo</p>
+            <div className="flex flex-wrap gap-2">
+              {PAYMENT_STATUSES.map((status) => (
+                <button
+                  key={status.value}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, payment_status: status.value })}
+                  className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                    formData.payment_status === status.value
+                      ? `${status.color} text-white border-transparent`
+                      : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
+                  }`}
+                >
+                  {status.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div>

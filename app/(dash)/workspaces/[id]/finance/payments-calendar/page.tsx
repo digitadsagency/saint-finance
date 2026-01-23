@@ -155,13 +155,25 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
     return { onTime, late, totalPaid, avgDaysDelay, totalDaysDelay }
   }, [paymentRecords])
 
+  // Mapeo de estatus a etiquetas y colores
+  const STATUS_MAP: Record<string, { label: string, color: string }> = {
+    'adelantado': { label: 'Pago adelantado', color: 'bg-blue-100 text-blue-700 border-blue-300' },
+    'ok': { label: 'OK', color: 'bg-green-100 text-green-700 border-green-300' },
+    'atrasado': { label: 'Atrasado', color: 'bg-red-100 text-red-700 border-red-300' },
+    'desfase': { label: 'Desfase', color: 'bg-red-100 text-red-700 border-red-300' },
+    'promesa': { label: 'Promesa de pago', color: 'bg-orange-100 text-orange-700 border-orange-300' },
+    'parcial': { label: 'Pago parcial', color: 'bg-yellow-100 text-yellow-700 border-yellow-300' },
+    'pendiente': { label: 'Pago pendiente', color: 'bg-yellow-100 text-yellow-700 border-yellow-300' },
+    'pausa': { label: 'Pausa', color: 'bg-gray-100 text-gray-700 border-gray-300' }
+  }
+
   // Función para determinar el estatus del cliente basado en sus pagos
   const getClientStatus = (projectId: string) => {
     const project = projects.find(p => p.id === projectId)
     
     // Si el cliente está pausado
     if (project?.status === 'paused' || project?.status === 'Pausado') {
-      return { status: 'pausa', label: 'Pausa', color: 'bg-gray-100 text-gray-700 border-gray-300' }
+      return { status: 'pausa', ...STATUS_MAP['pausa'] }
     }
     
     // Obtener pagos del cliente
@@ -169,13 +181,18 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
     
     // Si no tiene pagos registrados
     if (clientPayments.length === 0) {
-      return { status: 'pendiente', label: 'Pago pendiente', color: 'bg-yellow-100 text-yellow-700 border-yellow-300' }
+      return { status: 'pendiente', ...STATUS_MAP['pendiente'] }
     }
     
-    // Analizar el último pago
+    // Analizar el último pago - usar el estatus que el usuario asignó si existe
     const lastPayment = clientPayments.sort((a, b) => new Date(b.paid_date).getTime() - new Date(a.paid_date).getTime())[0]
     
-    // Calcular puntualidad general
+    // Si el último pago tiene un estatus asignado por el usuario, usarlo
+    if (lastPayment?.payment_status && STATUS_MAP[lastPayment.payment_status]) {
+      return { status: lastPayment.payment_status, ...STATUS_MAP[lastPayment.payment_status] }
+    }
+    
+    // Si no hay estatus asignado, calcularlo automáticamente
     const onTimeCount = clientPayments.filter(p => p.is_on_time).length
     const punctualityRate = (onTimeCount / clientPayments.length) * 100
     
@@ -186,21 +203,21 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
       const daysDiff = Math.ceil((expectedDate.getTime() - paidDate.getTime()) / (1000 * 60 * 60 * 24))
       
       if (daysDiff > 3) {
-        return { status: 'adelantado', label: 'Pago adelantado', color: 'bg-blue-100 text-blue-700 border-blue-300' }
+        return { status: 'adelantado', ...STATUS_MAP['adelantado'] }
       }
     }
     
     // Si tiene alta puntualidad
     if (punctualityRate >= 80) {
-      return { status: 'ok', label: 'OK', color: 'bg-green-100 text-green-700 border-green-300' }
+      return { status: 'ok', ...STATUS_MAP['ok'] }
     }
     
     // Si tiene pagos tardíos frecuentes
     if (punctualityRate < 60) {
-      return { status: 'desfase', label: 'Desfase', color: 'bg-red-100 text-red-700 border-red-300' }
+      return { status: 'desfase', ...STATUS_MAP['desfase'] }
     }
     
-    return { status: 'ok', label: 'OK', color: 'bg-green-100 text-green-700 border-green-300' }
+    return { status: 'ok', ...STATUS_MAP['ok'] }
   }
 
   // Calcular estadísticas por cliente (usando TODOS los pagos históricos, no solo del mes actual)
