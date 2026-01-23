@@ -32,6 +32,7 @@ export interface PaymentRecord {
   paid_date: string // YYYY-MM-DD (actual payment date)
   is_on_time: boolean // Calculated: paid_date <= expected_date
   days_delay?: number // Calculated: days late (if delayed)
+  payment_method?: string // Método de pago: Efectivo, Cuenta Marc, Cuenta Adal, Otro
   notes?: string
   created_at: string
   updated_at: string
@@ -261,11 +262,11 @@ export class FinanceService {
 
   // PAYMENT RECORDS (actual payments received)
   static async listPaymentRecords(workspaceId: string, month?: string): Promise<PaymentRecord[]> {
-    await this.ensureSheetExists('payment_records', ['id','workspace_id','project_id','billing_id','expected_amount','paid_amount','expected_date','paid_date','is_on_time','days_delay','notes','created_at','updated_at'])
+    await this.ensureSheetExists('payment_records', ['id','workspace_id','project_id','billing_id','expected_amount','paid_amount','expected_date','paid_date','is_on_time','days_delay','payment_method','notes','created_at','updated_at'])
     const { sheets, spreadsheetId } = await this.getSheet()
     const res = await this.withRetry(() => sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: 'payment_records!A2:M10000'
+      range: 'payment_records!A2:N10000'
     }))
     const rows = res.data.values || []
     let records = rows
@@ -285,9 +286,10 @@ export class FinanceService {
           paid_date: paidDate,
           is_on_time: isOnTime,
           days_delay: r[9] ? parseInt(r[9]) : undefined,
-          notes: r[10],
-          created_at: r[11],
-          updated_at: r[12]
+          payment_method: r[10] || '',
+          notes: r[11] || '',
+          created_at: r[12],
+          updated_at: r[13]
         }
       })
     
@@ -300,7 +302,7 @@ export class FinanceService {
   }
 
   static async createPaymentRecord(data: Omit<PaymentRecord, 'id' | 'created_at' | 'updated_at' | 'is_on_time' | 'days_delay'>): Promise<PaymentRecord> {
-    await this.ensureSheetExists('payment_records', ['id','workspace_id','project_id','billing_id','expected_amount','paid_amount','expected_date','paid_date','is_on_time','days_delay','notes','created_at','updated_at'])
+    await this.ensureSheetExists('payment_records', ['id','workspace_id','project_id','billing_id','expected_amount','paid_amount','expected_date','paid_date','is_on_time','days_delay','payment_method','notes','created_at','updated_at'])
     
     // Calculate is_on_time and days_delay
     const expectedDate = new Date(data.expected_date)
@@ -322,13 +324,14 @@ export class FinanceService {
       data.paid_date,
       isOnTime.toString(),
       daysDelay?.toString() || '',
+      data.payment_method || '',
       data.notes || '',
       now,
       now
     ]
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: 'payment_records!A:M',
+      range: 'payment_records!A:N',
       valueInputOption: 'RAW',
       requestBody: { values: [row] }
     })
@@ -343,13 +346,13 @@ export class FinanceService {
   }
 
   static async updatePaymentRecord(id: string, data: Partial<Omit<PaymentRecord, 'id' | 'created_at' | 'workspace_id' | 'is_on_time' | 'days_delay'>>): Promise<PaymentRecord> {
-    await this.ensureSheetExists('payment_records', ['id','workspace_id','project_id','billing_id','expected_amount','paid_amount','expected_date','paid_date','is_on_time','days_delay','notes','created_at','updated_at'])
+    await this.ensureSheetExists('payment_records', ['id','workspace_id','project_id','billing_id','expected_amount','paid_amount','expected_date','paid_date','is_on_time','days_delay','payment_method','notes','created_at','updated_at'])
     const { sheets, spreadsheetId } = await this.getSheet()
     
     // Get existing record
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: 'payment_records!A2:M10000'
+      range: 'payment_records!A2:N10000'
     })
     const rows = res.data.values || []
     const rowIndex = rows.findIndex(r => r[0] === id)
@@ -370,9 +373,10 @@ export class FinanceService {
       paid_date: existingRow[7] || '',
       is_on_time: existingRow[8] === 'true' || existingRow[8] === true,
       days_delay: existingRow[9] ? parseInt(existingRow[9]) : undefined,
-      notes: existingRow[10] || '',
-      created_at: existingRow[11],
-      updated_at: existingRow[12]
+      payment_method: existingRow[10] || '',
+      notes: existingRow[11] || '',
+      created_at: existingRow[12],
+      updated_at: existingRow[13]
     }
     
     // Merge with new data
@@ -401,6 +405,7 @@ export class FinanceService {
       updatedData.paid_date,
       isOnTime.toString(),
       daysDelay?.toString() || '',
+      updatedData.payment_method || '',
       updatedData.notes || '',
       existingRecord.created_at,
       now
@@ -409,7 +414,7 @@ export class FinanceService {
     // Update the row (rowIndex + 2 because we start from row 2 in the sheet)
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: `payment_records!A${rowIndex + 2}:M${rowIndex + 2}`,
+      range: `payment_records!A${rowIndex + 2}:N${rowIndex + 2}`,
       valueInputOption: 'RAW',
       requestBody: { values: [updatedRow] }
     })
@@ -423,13 +428,13 @@ export class FinanceService {
   }
 
   static async deletePaymentRecord(id: string): Promise<void> {
-    await this.ensureSheetExists('payment_records', ['id','workspace_id','project_id','billing_id','expected_amount','paid_amount','expected_date','paid_date','is_on_time','days_delay','notes','created_at','updated_at'])
+    await this.ensureSheetExists('payment_records', ['id','workspace_id','project_id','billing_id','expected_amount','paid_amount','expected_date','paid_date','is_on_time','days_delay','payment_method','notes','created_at','updated_at'])
     const { sheets, spreadsheetId } = await this.getSheet()
     
     // Get existing record to find row index
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: 'payment_records!A2:M10000'
+      range: 'payment_records!A2:N10000'
     })
     const rows = res.data.values || []
     const rowIndex = rows.findIndex(r => r[0] === id)

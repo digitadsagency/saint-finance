@@ -43,6 +43,7 @@ export async function POST(request: NextRequest) {
       paid_amount: Number(body.paid_amount),
       expected_date: expectedDate.toISOString().split('T')[0],
       paid_date: body.paid_date,
+      payment_method: body.payment_method || '',
       notes: body.notes || ''
     })
     return NextResponse.json(record, { status: 201 })
@@ -78,6 +79,7 @@ export async function PUT(request: NextRequest) {
     if (body.paid_amount !== undefined) updateData.paid_amount = Number(body.paid_amount)
     if (expectedDate) updateData.expected_date = expectedDate
     if (body.paid_date) updateData.paid_date = body.paid_date
+    if (body.payment_method !== undefined) updateData.payment_method = body.payment_method
     if (body.notes !== undefined) updateData.notes = body.notes
 
     const record = await FinanceService.updatePaymentRecord(body.id, updateData)

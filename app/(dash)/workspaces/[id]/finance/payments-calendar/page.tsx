@@ -75,7 +75,19 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   })
   const [summaryStatusFilter, setSummaryStatusFilter] = useState<string>('all') // 'all', 'paid', 'pending', 'partial'
+  const [clientStatusFilter, setClientStatusFilter] = useState<string>('all') // Filtro para estadísticas por cliente
   const [isRefreshing, setIsRefreshing] = useState(false)
+  
+  // Opciones de estatus para clientes
+  const CLIENT_STATUS_OPTIONS = [
+    { value: 'all', label: 'Todos' },
+    { value: 'adelantado', label: 'Pago adelantado' },
+    { value: 'ok', label: 'OK' },
+    { value: 'desfase', label: 'Desfase' },
+    { value: 'pendiente', label: 'Pago pendiente' },
+    { value: 'promesa', label: 'Pago promesa' },
+    { value: 'pausa', label: 'Pausa' }
+  ]
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/sign-in')
@@ -143,16 +155,65 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
     return { onTime, late, totalPaid, avgDaysDelay, totalDaysDelay }
   }, [paymentRecords])
 
+  // Función para determinar el estatus del cliente basado en sus pagos
+  const getClientStatus = (projectId: string) => {
+    const project = projects.find(p => p.id === projectId)
+    
+    // Si el cliente está pausado
+    if (project?.status === 'paused' || project?.status === 'Pausado') {
+      return { status: 'pausa', label: 'Pausa', color: 'bg-gray-100 text-gray-700 border-gray-300' }
+    }
+    
+    // Obtener pagos del cliente
+    const clientPayments = allPaymentRecords.filter(pr => (pr.project_id || pr.projectId) === projectId)
+    
+    // Si no tiene pagos registrados
+    if (clientPayments.length === 0) {
+      return { status: 'pendiente', label: 'Pago pendiente', color: 'bg-yellow-100 text-yellow-700 border-yellow-300' }
+    }
+    
+    // Analizar el último pago
+    const lastPayment = clientPayments.sort((a, b) => new Date(b.paid_date).getTime() - new Date(a.paid_date).getTime())[0]
+    
+    // Calcular puntualidad general
+    const onTimeCount = clientPayments.filter(p => p.is_on_time).length
+    const punctualityRate = (onTimeCount / clientPayments.length) * 100
+    
+    // Determinar si el último pago fue adelantado
+    if (lastPayment) {
+      const expectedDate = new Date(lastPayment.expected_date)
+      const paidDate = new Date(lastPayment.paid_date)
+      const daysDiff = Math.ceil((expectedDate.getTime() - paidDate.getTime()) / (1000 * 60 * 60 * 24))
+      
+      if (daysDiff > 3) {
+        return { status: 'adelantado', label: 'Pago adelantado', color: 'bg-blue-100 text-blue-700 border-blue-300' }
+      }
+    }
+    
+    // Si tiene alta puntualidad
+    if (punctualityRate >= 80) {
+      return { status: 'ok', label: 'OK', color: 'bg-green-100 text-green-700 border-green-300' }
+    }
+    
+    // Si tiene pagos tardíos frecuentes
+    if (punctualityRate < 60) {
+      return { status: 'desfase', label: 'Desfase', color: 'bg-red-100 text-red-700 border-red-300' }
+    }
+    
+    return { status: 'ok', label: 'OK', color: 'bg-green-100 text-green-700 border-green-300' }
+  }
+
   // Calcular estadísticas por cliente (usando TODOS los pagos históricos, no solo del mes actual)
   const clientPaymentStats = useMemo(() => {
     const statsByClient = new Map<string, {
+      projectId: string
       clientName: string
       totalPayments: number
       onTimePayments: number
       latePayments: number
-      totalDaysDelay: number
       avgDaysDelay: number
       punctualityRate: number
+      clientStatus: { status: string, label: string, color: string }
     }>()
 
     // Usar todos los pagos históricos para estadísticas completas
@@ -163,13 +224,14 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
       
       if (!statsByClient.has(projectId)) {
         statsByClient.set(projectId, {
+          projectId,
           clientName,
           totalPayments: 0,
           onTimePayments: 0,
           latePayments: 0,
-          totalDaysDelay: 0,
           avgDaysDelay: 0,
-          punctualityRate: 0
+          punctualityRate: 0,
+          clientStatus: getClientStatus(projectId)
         })
       }
 
@@ -179,23 +241,30 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
         stats.onTimePayments += 1
       } else {
         stats.latePayments += 1
+        stats.avgDaysDelay += Number(pr.days_delay || 0)
       }
-      stats.totalDaysDelay += Number(pr.days_delay || 0)
     })
 
     // Calcular promedios y porcentajes
-    statsByClient.forEach((stats, projectId) => {
+    statsByClient.forEach((stats) => {
       stats.avgDaysDelay = stats.latePayments > 0 
-        ? stats.totalDaysDelay / stats.latePayments 
+        ? stats.avgDaysDelay / stats.latePayments 
         : 0
       stats.punctualityRate = stats.totalPayments > 0
         ? (stats.onTimePayments / stats.totalPayments) * 100
         : 0
+      stats.clientStatus = getClientStatus(stats.projectId)
     })
 
-    return Array.from(statsByClient.values())
-      .sort((a, b) => b.totalDaysDelay - a.totalDaysDelay) // Ordenar por días de retraso acumulado
-  }, [allPaymentRecords, projects])
+    let result = Array.from(statsByClient.values())
+    
+    // Aplicar filtro de estatus
+    if (clientStatusFilter !== 'all') {
+      result = result.filter(s => s.clientStatus.status === clientStatusFilter)
+    }
+    
+    return result.sort((a, b) => a.clientName.localeCompare(b.clientName)) // Ordenar alfabéticamente
+  }, [allPaymentRecords, projects, clientStatusFilter])
 
   // Calcular totales del mes - DEBE ESTAR ANTES DE CUALQUIER RETURN CONDICIONAL
   // Solo incluir clientes activos EN EL MES SELECCIONADO
@@ -732,21 +801,36 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
         </div>
 
         {/* Estadísticas de Puntualidad por Cliente - DESPUÉS del calendario */}
-        {clientPaymentStats.length > 0 && (
-          <section className="bg-white rounded-lg shadow-sm border p-6 mb-6">
-            <div className="mb-6">
+        <section className="bg-white rounded-lg shadow-sm border p-6 mb-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+            <div>
               <h2 className="text-xl font-semibold text-gray-900 mb-2">Estadísticas de Puntualidad por Cliente</h2>
               <p className="text-sm text-gray-600">Análisis histórico completo de todos los pagos registrados</p>
             </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-600">Filtrar por estatus:</label>
+              <Select value={clientStatusFilter} onValueChange={setClientStatusFilter}>
+                <SelectTrigger className="w-44">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CLIENT_STATUS_OPTIONS.map(opt => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          {clientPaymentStats.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead>
                   <tr className="text-left text-gray-600 border-b">
                     <th className="py-3 pr-4 font-semibold">Cliente</th>
+                    <th className="py-3 pr-4 font-semibold">Estatus</th>
                     <th className="py-3 pr-4 font-semibold">Total Pagos</th>
                     <th className="py-3 pr-4 font-semibold">A Tiempo</th>
                     <th className="py-3 pr-4 font-semibold">Tardíos</th>
-                    <th className="py-3 pr-4 font-semibold">Días Retraso Acumulado</th>
                     <th className="py-3 pr-4 font-semibold">Retraso Promedio</th>
                     <th className="py-3 pr-4 font-semibold">Puntualidad</th>
                   </tr>
@@ -755,6 +839,11 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
                   {clientPaymentStats.map((stats, idx) => (
                     <tr key={idx} className="border-b hover:bg-gray-50">
                       <td className="py-3 pr-4 font-medium">{stats.clientName}</td>
+                      <td className="py-3 pr-4">
+                        <Badge className={stats.clientStatus.color}>
+                          {stats.clientStatus.label}
+                        </Badge>
+                      </td>
                       <td className="py-3 pr-4">{stats.totalPayments}</td>
                       <td className="py-3 pr-4">
                         <Badge className="bg-green-100 text-green-700 border-green-300">
@@ -765,11 +854,6 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
                         <Badge className="bg-red-100 text-red-700 border-red-300">
                           {stats.latePayments}
                         </Badge>
-                      </td>
-                      <td className="py-3 pr-4">
-                        <span className={`font-semibold ${stats.totalDaysDelay > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                          {stats.totalDaysDelay} días
-                        </span>
                       </td>
                       <td className="py-3 pr-4">
                         {stats.avgDaysDelay > 0 ? (
@@ -796,8 +880,12 @@ export default function PaymentsCalendarPage({ params }: { params: { id: string 
                 </tbody>
               </table>
             </div>
-          </section>
-        )}
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              No hay clientes con el estatus seleccionado
+            </div>
+          )}
+        </section>
 
         {/* Summary */}
         <div className="bg-white rounded-lg shadow-sm border p-6">

@@ -18,6 +18,7 @@ interface PaymentRecordDialogProps {
     expected_amount: number
     paid_amount: number
     paid_date: string
+    payment_method?: string
     notes?: string
   }) => Promise<void>
   billings: any[]
@@ -41,8 +42,12 @@ export function PaymentRecordDialog({
     billing_id: '',
     paid_amount: '',
     paid_date: new Date().toISOString().split('T')[0],
+    payment_method: '',
     notes: ''
   })
+  const [customMethod, setCustomMethod] = useState('')
+  
+  const PAYMENT_METHODS = ['Efectivo', 'Cuenta Marc', 'Cuenta Adal', 'Otro']
   const [submitting, setSubmitting] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
@@ -54,20 +59,26 @@ export function PaymentRecordDialog({
     if (open) {
       if (editingPayment) {
         // Modo edición: cargar datos del pago existente
+        const existingMethod = editingPayment.payment_method || ''
+        const isKnownMethod = PAYMENT_METHODS.includes(existingMethod) || existingMethod === ''
         setFormData({
           billing_id: editingPayment.billing_id || '',
           paid_amount: editingPayment.paid_amount?.toString() || '',
           paid_date: editingPayment.paid_date || new Date().toISOString().split('T')[0],
+          payment_method: isKnownMethod ? existingMethod : 'Otro',
           notes: editingPayment.notes || ''
         })
+        setCustomMethod(isKnownMethod ? '' : existingMethod)
       } else {
         // Modo creación: usar valores por defecto
         setFormData({
           billing_id: defaultBillingId || '',
           paid_amount: '',
           paid_date: defaultDate || new Date().toISOString().split('T')[0],
+          payment_method: '',
           notes: ''
         })
+        setCustomMethod('')
       }
     }
   }, [open, defaultDate, defaultBillingId, editingPayment])
@@ -103,6 +114,9 @@ export function PaymentRecordDialog({
 
     setSubmitting(true)
     try {
+      // Determinar el método de pago final
+      const finalPaymentMethod = formData.payment_method === 'Otro' ? customMethod : formData.payment_method
+      
       await onSubmit({
         id: editingPayment?.id,
         project_id: selectedBilling.project_id,
@@ -110,14 +124,17 @@ export function PaymentRecordDialog({
         expected_amount: selectedBilling.monthly_amount,
         paid_amount: Number(formData.paid_amount),
         paid_date: formData.paid_date,
+        payment_method: finalPaymentMethod,
         notes: formData.notes
       })
       setFormData({
         billing_id: '',
         paid_amount: '',
         paid_date: new Date().toISOString().split('T')[0],
+        payment_method: '',
         notes: ''
       })
+      setCustomMethod('')
       onClose()
     } catch (error) {
       console.error('Error submitting payment:', error)
@@ -247,6 +264,39 @@ export function PaymentRecordDialog({
               <p className="text-xs text-gray-500 mt-1">
                 Monto esperado: {selectedBilling.monthly_amount.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
               </p>
+            )}
+          </div>
+
+          <div>
+            <Label htmlFor="payment_method">Método de Pago</Label>
+            <div className="flex flex-wrap gap-2 mt-1">
+              {PAYMENT_METHODS.map((method) => (
+                <button
+                  key={method}
+                  type="button"
+                  onClick={() => {
+                    setFormData({ ...formData, payment_method: method })
+                    if (method !== 'Otro') setCustomMethod('')
+                  }}
+                  className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                    formData.payment_method === method
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
+                  }`}
+                >
+                  {method}
+                </button>
+              ))}
+            </div>
+            {formData.payment_method === 'Otro' && (
+              <Input
+                id="custom_method"
+                type="text"
+                value={customMethod}
+                onChange={(e) => setCustomMethod(e.target.value)}
+                placeholder="Escribe el método de pago..."
+                className="mt-2"
+              />
             )}
           </div>
 
